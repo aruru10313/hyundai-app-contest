@@ -14,10 +14,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  repo-check:
-    name: Repository skeleton check
+  ci:
+    name: Repository check and Android build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -35,46 +35,46 @@ jobs:
             echo "::warning::AGENTS.md not found in repository (CI rules taken from project brief)"
           fi
 
-      - name: Report Gradle readiness
+      - name: Detect Gradle wrapper
+        id: gradle
         run: |
           if [ -f gradlew ] && [ -f gradle/wrapper/gradle-wrapper.properties ]; then
-            echo "Gradle wrapper found: build job will run."
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Gradle wrapper found: build steps will run."
           else
-            echo "Gradle wrapper not committed yet: build job will be skipped (Step 2)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Gradle wrapper not committed yet: build steps are skipped (Step 2)."
           fi
 
-  android-build:
-    name: Build debug APK
-    needs: repo-check
-    # Activated automatically once the Gradle wrapper is committed (Step 2).
-    if: ${{ hashFiles('gradlew', 'gradle/wrapper/gradle-wrapper.properties') != '' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
       - name: Set up JDK 17
+        if: steps.gradle.outputs.ready == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Android SDK
+        if: steps.gradle.outputs.ready == 'true'
         uses: android-actions/setup-android@v3
 
       - name: Set up Gradle
+        if: steps.gradle.outputs.ready == 'true'
         uses: gradle/actions/setup-gradle@v4
 
       - name: Make gradlew executable
+        if: steps.gradle.outputs.ready == 'true'
         run: chmod +x ./gradlew
 
       - name: Run JVM unit tests
+        if: steps.gradle.outputs.ready == 'true'
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Assemble debug APK
+        if: steps.gradle.outputs.ready == 'true'
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload debug APK
+        if: steps.gradle.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
