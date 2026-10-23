@@ -498,3 +498,35 @@
 
 - Pleos 에뮬레이터 또는 차량이 현재 ADB 검증 대상에 연결되어 있지 않아 플랫폼별 UX 규제와 오디오 출력을 확인하지 못함.
 - 시제품의 장면은 실시간 3D가 아니다. 추후 실시간 3D가 필요하다면 차량 성능·화면 정책·실제 수상작 제출 요구를 확인하고 그 단계에서 엔진/에셋 사용 범위를 결정해야 함..
+
+---
+
+## 15. Step 4a: Pleos Vehicle State 읽기 연동
+
+### 완료
+
+- Playground 프로젝트에서 확인한 `CAR_DRIVE` 조회 권한을 AndroidManifest에 선언.
+- `VehicleStateProvider` 인터페이스, Mock 구현, Pleos SDK 구현 및 한 곳에서 바꾸는 `ProviderConfig.usePleosVehicleSdk` 설정 추가.
+- Pleos 구현에서 SDK `Vehicle.initialize()` 후 `getDrivingMode().getCurrentDrivingModeState()`와 `getBrake().getCurrentBrakePedalStatus()`를 호출하고, 비동기 응답/오류를 UI에 표시.
+- 화면에 차량 데이터 출처, 드라이브 모드, 브레이크 상태, SDK 오류를 보여주는 영역 추가.
+- 정확한 타입/콜백을 공식 Vehicle 문서 및 로컬 Vehicle 2.3.2 아티팩트에서 확인.
+- `testDebugUnitTest assembleDebug` 통과.
+
+### 확인된 사실
+
+- 사용자가 제공한 Playground 권한 상세에 `CAR_DRIVE`와 조회 API들이 `사용 가능`으로 표시되어 있음.
+- 공식 Vehicle SDK 문서는 `Vehicle(context)` → `initialize()` → 도메인 accessor → 비동기 `onComplete`/`onFailed` → `release()` 패턴을 명시.
+- 주행 모드 API 타입은 `DrivingModeType?`, 브레이크 상태는 `Boolean?`.
+- 현재 설정은 Pleos Vehicle SDK이며 `ProviderConfig.usePleosVehicleSdk = false`로 Mock 공급자를 선택할 수 있음.
+
+### UNVERIFIED
+
+- SDK 콜백이 Pleos Connect Emulator/차량에서 실제 차량 값으로 성공하는지. 연결된 Android 전화기는 Pleos Vehicle Service를 제공하지 않음.
+- `CAR_DRIVE` 승인 정보가 현재 프로젝트/앱 패키지의 App Market 등록 심사에서도 동일하게 적용되는지.
+- NaviHelper `DestinationInfo.remainTime` 시간 단위. 따라서 ETA는 계속 Mock으로 제공하고 `StoryPlanner` 초 값으로 변환하지 않음.
+- TTS는 사용자 권한 화면에서 `준비 중`으로 확인되어 Pleos TTS 대신 Android 기본 TTS를 유지.
+
+### 막힌 점
+
+- ADB 연결 Android 스마트폰은 Pleos Vehicle Service가 아니므로 실제 SDK 차량 데이터 검증은 Pleos Connect Emulator 또는 차량 연결 후 가능.
+- 다음 하위 단계는 `NAVI_ROUTE`로 목적지/경로 정보를 앱에 표시하는 것이며, ETA 단위가 확인되기 전에는 초 기반 이야기 길이 조정에 연결하지 않음..

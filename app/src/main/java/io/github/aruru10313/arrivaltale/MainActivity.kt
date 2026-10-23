@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,11 @@ import io.github.aruru10313.arrivaltale.data.EtaProvider
 import io.github.aruru10313.arrivaltale.data.LocalStoryGenerator
 import io.github.aruru10313.arrivaltale.data.MockEtaProvider
 import io.github.aruru10313.arrivaltale.data.TtsProvider
+import io.github.aruru10313.arrivaltale.data.PleosVehicleStateProvider
+import io.github.aruru10313.arrivaltale.data.ProviderConfig
+import io.github.aruru10313.arrivaltale.data.MockVehicleStateProvider
+import io.github.aruru10313.arrivaltale.data.VehicleStateProvider
+import io.github.aruru10313.arrivaltale.data.VehicleSnapshot
 import io.github.aruru10313.arrivaltale.domain.AgeGroup
 import io.github.aruru10313.arrivaltale.domain.PlannedChapter
 import io.github.aruru10313.arrivaltale.domain.Story
@@ -70,10 +76,17 @@ private val Gold = Color(0xFFFFD78A)
 
 class MainActivity : ComponentActivity() {
     private lateinit var ttsProvider: AndroidTtsProvider
+    private lateinit var vehicleStateProvider: VehicleStateProvider
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ttsProvider = AndroidTtsProvider(applicationContext)
+        vehicleStateProvider = if (ProviderConfig.usePleosVehicleSdk) {
+            PleosVehicleStateProvider(applicationContext)
+        } else {
+            MockVehicleStateProvider()
+        }
+        vehicleStateProvider.connect()
         val stories = LocalStoryGenerator(applicationContext).stories(AgeGroup.ELEMENTARY)
         setContent {
             MaterialTheme {
@@ -82,6 +95,7 @@ class MainActivity : ComponentActivity() {
                         stories = stories,
                         etaProvider = MockEtaProvider(),
                         ttsProvider = ttsProvider,
+                        vehicleStateProvider = vehicleStateProvider,
                         planner = StoryPlanner(),
                     )
                 }
@@ -90,6 +104,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        vehicleStateProvider.release()
         ttsProvider.release()
         super.onDestroy()
     }
@@ -100,6 +115,7 @@ private fun ArrivalTaleScreen(
     stories: List<Story>,
     etaProvider: EtaProvider,
     ttsProvider: TtsProvider,
+    vehicleStateProvider: VehicleStateProvider,
     planner: StoryPlanner,
 ) {
     var remainingSeconds by remember { mutableIntStateOf(10 * 60) }
@@ -110,6 +126,7 @@ private fun ArrivalTaleScreen(
     var playbackJob by remember { mutableStateOf<Job?>(null) }
     var etaJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
+    val vehicleState by vehicleStateProvider.state.collectAsState()
 
     fun stopStory() {
         playbackJob?.cancel()
@@ -183,6 +200,7 @@ private fun ArrivalTaleScreen(
                     onStorySelected = { selectedStory = it },
                     remainingSeconds = remainingSeconds,
                     currentChapter = currentChapter,
+                    vehicleState = vehicleState,
                     status = status,
                     isPlaying = isPlaying,
                     onPlayToggle = ::startStory,
@@ -212,6 +230,7 @@ private fun ArrivalTaleScreen(
                     onStorySelected = { selectedStory = it },
                     remainingSeconds = remainingSeconds,
                     currentChapter = currentChapter,
+                    vehicleState = vehicleState,
                     status = status,
                     isPlaying = isPlaying,
                     onPlayToggle = ::startStory,
@@ -382,6 +401,7 @@ private fun StoryControls(
     onStorySelected: (Story) -> Unit,
     remainingSeconds: Int,
     currentChapter: String,
+    vehicleState: io.github.aruru10313.arrivaltale.data.VehicleSnapshot,
     status: String,
     isPlaying: Boolean,
     onPlayToggle: () -> Unit,
@@ -406,6 +426,7 @@ private fun StoryControls(
             textAlign = TextAlign.Center,
             maxLines = 2,
         )
+        VehicleStateCard(vehicleState)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -433,6 +454,7 @@ private fun StoryControls(
                             fontSize = 11.sp,
                         )
                     }
+
                 }
             }
         }
@@ -480,5 +502,32 @@ private fun StoryControls(
             }
         }
         Text("화면을 보지 않아도 음성으로 함께 즐겨요", color = Muted, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun VehicleStateCard(
+    state: VehicleSnapshot,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = Panel,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(state.source, color = Gold, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            val mode = state.drivingMode?.let { "주행 모드  $it" } ?: "주행 모드  확인 중"
+            val brake = state.brakePedalPressed?.let {
+                if (it) "브레이크  감지" else "브레이크  해제"
+            } ?: "브레이크  확인 중"
+            Text(mode, color = Color.White, fontSize = 15.sp)
+            Text(brake, color = Muted, fontSize = 14.sp)
+            state.error?.let { error ->
+                Text("차량 SDK 응답: $error", color = Color(0xFFFFB4A9), fontSize = 12.sp)
+            }
+        }
     }
 }

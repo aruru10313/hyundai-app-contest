@@ -6,6 +6,8 @@
         android:name="android.hardware.type.automotive"
         android:required="true" />
 
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+
     <!--
       Pleos 권한은 실제 기능을 붙이는 단계에서 추가한다.
       - TTS: pleos.car.permission.TTS_SERVICE
