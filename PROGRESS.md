@@ -1,6 +1,6 @@
 # PROGRESS
 
-최종 업데이트: 2026-10-23 (Step 1.5: 공식 문서 조사)
+최종 업데이트: 2026-10-23 (Step 3: Mock 기반 MVP)
 
 > 이 문서는 "확인된 사실"과 "확인하지 못한 것"을 구분해서 기록한다.
 > 추측은 쓰지 않고, 확인 못 한 항목은 `UNVERIFIED`로 표시한다.
@@ -427,3 +427,42 @@
    - (C) Pleos TTS 승인 상태를 먼저 확인
 3. Pleos Playground 계정에서 TTS/STT 실제 신청 상태 확인 (사용자만 가능).
 4. 에뮬레이터 설치 여부 결정 (로컬 검증을 할지, CI 빌드만 할지).
+
+---
+
+## 13. Step 3: 인터페이스와 Mock 기반 MVP
+
+### 완료
+
+- 저장소에 제공된 프로젝트 지침을 `AGENTS.md`로 추가.
+- `EtaProvider` 인터페이스와 초 단위 카운트다운 `MockEtaProvider` 구현.
+- `TtsProvider` 인터페이스와 Android 기본 한국어 TTS 구현.
+- `StoryGenerator` 인터페이스와 `assets/stories.json` 기반 동화 로더 구현.
+- 모험/동물/우주 주제의 전연령 동화 3편 추가 (각 5개 챕터, 추정 5분 분량).
+- `StoryPlanner`가 ETA 버짓에 맞춰 일반/압축 챕터를 고르고 결말을 마지막에 배치하도록 확장.
+- 큰 버튼으로 주제를 선택하고 ETA/재생 챕터를 보는 기본 Compose 화면 구현.
+- 10분/5분/ETA 단축 시나리오를 포함한 순수 Kotlin 단위 테스트 추가.
+- 로컬 JDK 17 + Android SDK에서 `testDebugUnitTest assembleDebug` 통과.
+- JSON 파싱 및 동화 개수/챕터 분량 확인 완료.
+
+### 확인된 사실
+
+- Pleos Maven 저장소에서 NaviHelper 3.0.5와 TextToSpeech 3.3.1 아티팩트를 내려받아 빌드할 수 있음.
+- Pleos TTS API의 클래스/리스너 시그니처는 로컬 SDK 아티팩트에서 확인 가능.
+- 현재 기본 시연 경로는 Mock ETA + Android TTS이며 앱 등록 자격 증명은 사용하지 않음.
+
+### UNVERIFIED
+
+- NaviHelper `remainTime` / `duration`의 단위가 초인지 여부. 따라서 SDK ETA는 `Flow<Int>` 초 값으로 연결하지 않음.
+- 실제 Pleos 에뮬레이터/차량에서 NaviHelper 값 수신 및 Android 한국어 TTS 음성 설치 여부.
+- Pleos TTS/STT 사용 신청이 현재도 준비 중인지, 그리고 해당 권한이 승인될 수 있는지.
+- 챕터별 `estimatedSeconds`는 기획 추정치이며 실차 TTS로 발화 시간을 측정하지 않음.
+- 연령대 선택은 인터페이스에 반영했으나 현재 JSON 이야기의 연령별 문안 차이는 없음.
+- 공식 LLM SDK 및 호출 제약을 확인하지 못해 LLM 생성기는 추가하지 않음.
+
+### 막힌 점
+
+- 프로젝트 ID만으로 Pleos TTS/NaviHelper 접근 권한을 부여받는 것은 확인되지 않음. Project ID는 앱 프로젝트 식별 정보로만 취급하며 코드에 하드코딩하지 않음.
+- Pleos TTS SDK를 기본 시연 경로로 활성화하려면 사용 가능 상태와 `TTS_SERVICE` 권한/앱 등록 절차를 확인해야 함.
+- 정확한 ETA 맞춤 재생을 검증하려면 NaviHelper 시간 단위와 에뮬레이터/실차 테스트가 필요함.
+- 본 Step 3을 마친 뒤 다음 단계(실제 Pleos SDK 연동)로 넘어가기 전 확인이 필요함..
