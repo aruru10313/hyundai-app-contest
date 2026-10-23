@@ -57,6 +57,12 @@ jobs:
         if: steps.gradle.outputs.ready == 'true'
         uses: android-actions/setup-android@v3
 
+      - name: Install Android SDK packages
+        if: steps.gradle.outputs.ready == 'true'
+        run: |
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          sdkmanager --list_installed
+
       - name: Set up Gradle
         if: steps.gradle.outputs.ready == 'true'
         uses: gradle/actions/setup-gradle@v4
