@@ -30,3 +30,20 @@
 ## 기술 방향
 - 언어: Kotlin, 빌드: Gradle. UI 방식은 Pleos 디자인 가이드를 문서에서 확인해 따른다.
 - 구조: ui / domain(StoryPlanner) / data(EtaProvider, TtsProvider, StoryGenerator)
+
+## 제품 방향: 차량 헤드유닛 네이티브 앱
+- 이 앱은 스마트폰 앱이 아니라 Pleos Connect 헤드유닛에서 직접 실행되는 차량용 앱이다.
+- 휴대폰·블루투스 연동 없이 동작한다. 콘텐츠는 앱에 내장하고, 네트워크 연결을 필수로 하지 않는다.
+- 자동 재생은 공식 NaviHelper NavigationStatus의 ROUTE_DRIVE 진입 이벤트를 기준으로 한다. 휴대폰/블루투스 트리거를 사용하지 않는다.
+- ETA·차량 상태·TTS 등 차량 시스템 연동은 각 Provider 인터페이스 뒤에 격리하고, Mock/Fallback 구현도 제공한다.
+
+## 주행 안전 및 DO
+- CarUxRestrictions의 requiresDistractionOptimization 및 active restrictions를 기준으로 주행 중 UX를 제한한다. 속도/기어를 주행 판정 대체 신호로 쓰지 않는다.
+- 주행 중 장면 선택, 애니메이션, 자동 스크롤을 표시하지 않는다. 큰 재생/일시정지 조작과 필수 상태 텍스트만 제공한다.
+- 주차/DO 미요구 상태에서만 장면과 주제 선택을 표시한다.
+- DO 선언 방식과 국가/차종별 적용 범위는 공식 문서에서 확인하고, 미확인 사항은 UNVERIFIED로 기록한다.
+
+## 디자인 및 3D
+- 현대자동차그룹의 로고, 서체 파일, 브랜드 에셋은 사용하지 않는다. 공식 Pleos 디자인 문서에서 확인된 디자인 원칙을 따른다.
+- Portrait/Landscape를 모두 지원하고, 주행 중 핵심 조작은 큰 버튼으로 최소화한다.
+- 실시간 3D는 주차 화면에서만 검토한다. 주행 화면에서는 렌더링하지 않으며 성능/정책/라이선스를 확인하기 전에는 새 엔진이나 에셋을 추가하지 않는다.

@@ -530,3 +530,37 @@
 
 - ADB 연결 Android 스마트폰은 Pleos Vehicle Service가 아니므로 실제 SDK 차량 데이터 검증은 Pleos Connect Emulator 또는 차량 연결 후 가능.
 - 다음 하위 단계는 `NAVI_ROUTE`로 목적지/경로 정보를 앱에 표시하는 것이며, ETA 단위가 확인되기 전에는 초 기반 이야기 길이 조정에 연결하지 않음..
+
+---
+
+## 16. A단계: 주행/주차 모드와 출발 자동 시작
+
+최종 업데이트: 2026-10-23
+
+### 완료
+
+- `UxRestrictionProvider`에 Mock 구현과 Android Automotive `CarUxRestrictionsManager` 구현을 추가.
+- 실제 차량 UX 규제 상태는 `isRequiresDistractionOptimization`으로 PARKED/DRIVING을 구분하고, 주행 중에는 조회에 실패하거나 연결이 끊겨도 DRIVING으로 제한하는 fail-safe 동작으로 구성.
+- AndroidManifest에 `distractionOptimized=true` Activity 메타데이터를 선언. Android 공식 API의 `Car.META_DATA_DISTRACTION_OPTIMIZED`가 Activity 메타데이터 키를 나타내며, Android 35 SDK의 키 값은 `distractionOptimized`.
+- 주차 모드에서만 장면과 주제 선택, 차량 SDK 디버그 카드를 표시. 주행 모드에서는 해당 요소를 숨기고 큰 재생/일시정지 버튼과 안내 텍스트만 표시.
+- `NavigationStateProvider`의 Mock/ Pleos 구현을 추가하고, NaviHelper `onNavigationStatus`에서 `ROUTE_DRIVE` 진입 시 `TripAutoStartGate`로 중복 없이 자동 재생하도록 연결.
+- Mock 주행/주차 토글은 실제 provider와 분리해 시연용으로 제공.
+- `TripAutoStartGate` 및 Mock UX 상태 전환 JVM 테스트 추가.
+- `testDebugUnitTest assembleDebug` 통과. APK를 ADB 연결 Android 16 휴대폰에 설치했고 Activity가 전면 실행 상태임을 확인. 크래시 로그는 확인되지 않음.
+
+### 확인된 사실
+
+- Android Automotive 공식 `Car` API는 `CarUxRestrictionsManager` 및 `Car.META_DATA_DISTRACTION_OPTIMIZED`를 제공하며, 후자는 Activity가 주행 중 방해 최적화되었음을 나타내는 AndroidManifest 메타데이터다.
+- Android 공식 `Car` API에는 위험 권한 `PERMISSION_CAR_DRIVING_STATE_3P`가 정의되어 있다. 이 구현은 API 35 컴파일 SDK에 해당 심볼이 없어 permission 문자열 `android.car.permission.CAR_DRIVING_STATE_3P`를 사용하며 manifest 선언과 런타임 요청을 추가했다.
+- Pleos NaviHelper 문서/샘플에서 `NaviHelper.initialize`, listener 등록, `onNavigationStatus(NavigationStatus)` 및 `NavigationStatus.ROUTE_DRIVE` 식별자를 확인했다.
+
+### UNVERIFIED
+
+- Pleos Connect에서 `CAR_DRIVING_STATE_3P` 권한의 실제 부여 방식, 사용자의 런타임 승인 여부 및 Playground/App Market 승인 조건.
+- Pleos Connect에서 Activity `distractionOptimized` 메타데이터의 심사/실행 적용 방식 및 이 앱의 주행 중 UI 허용 여부.
+- 실제 Pleos 차량/에뮬레이터에서 `CarUxRestrictionsManager` 콜백과 NaviHelper 상태 콜백이 성공적으로 오는지. 이번 ADB 확인은 일반 Android 휴대폰에서 수행했으며 Mock 동작 및 앱 실행만 검증함.
+- NaviHelper 연결 실패 시 재연결 정책. 현재 실패는 화면 상태로 표시하고 자동 재시도는 하지 않음.
+
+### 막힌 점
+
+- Pleos Connect Emulator 또는 차량 서비스가 연결된 장치가 없어 실차 주행/주차 UX restrictions 및 자동 시작을 검증할 수 없음.

@@ -1,9 +1,11 @@
 package io.github.aruru10313.arrivaltale
 
 import android.os.Bundle
+import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +61,13 @@ import io.github.aruru10313.arrivaltale.data.TtsProvider
 import io.github.aruru10313.arrivaltale.data.PleosVehicleStateProvider
 import io.github.aruru10313.arrivaltale.data.ProviderConfig
 import io.github.aruru10313.arrivaltale.data.MockVehicleStateProvider
+import io.github.aruru10313.arrivaltale.data.AndroidCarUxRestrictionProvider
+import io.github.aruru10313.arrivaltale.data.MockUxRestrictionProvider
+import io.github.aruru10313.arrivaltale.data.UxRestrictionProvider
+import io.github.aruru10313.arrivaltale.data.DrivingSafetyMode
+import io.github.aruru10313.arrivaltale.data.MockNavigationStateProvider
+import io.github.aruru10313.arrivaltale.data.NavigationStateProvider
+import io.github.aruru10313.arrivaltale.data.PleosNavigationStateProvider
 import io.github.aruru10313.arrivaltale.data.VehicleStateProvider
 import io.github.aruru10313.arrivaltale.data.VehicleSnapshot
 import io.github.aruru10313.arrivaltale.domain.AgeGroup
@@ -65,6 +75,7 @@ import io.github.aruru10313.arrivaltale.domain.PlannedChapter
 import io.github.aruru10313.arrivaltale.domain.Story
 import io.github.aruru10313.arrivaltale.domain.StoryPlanner
 import io.github.aruru10313.arrivaltale.domain.StoryTheme
+import io.github.aruru10313.arrivaltale.domain.TripAutoStartGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -77,16 +88,45 @@ private val Gold = Color(0xFFFFD78A)
 class MainActivity : ComponentActivity() {
     private lateinit var ttsProvider: AndroidTtsProvider
     private lateinit var vehicleStateProvider: VehicleStateProvider
+    private lateinit var uxRestrictionProvider: UxRestrictionProvider
+    private lateinit var navigationStateProvider: NavigationStateProvider
+    private var isAutomotive = false
+    private val carDrivingStatePermission = "android.car.permission.CAR_DRIVING_STATE_3P"
+
+    private val drivingStatePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted || isAutomotive) uxRestrictionProvider.connect()
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ttsProvider = AndroidTtsProvider(applicationContext)
-        vehicleStateProvider = if (ProviderConfig.usePleosVehicleSdk) {
+        isAutomotive = packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)
+        vehicleStateProvider = if (isAutomotive && ProviderConfig.usePleosVehicleSdk) {
             PleosVehicleStateProvider(applicationContext)
         } else {
             MockVehicleStateProvider()
         }
         vehicleStateProvider.connect()
+        uxRestrictionProvider = if (isAutomotive && ProviderConfig.usePleosUxRestrictions) {
+            AndroidCarUxRestrictionProvider(applicationContext)
+        } else {
+            MockUxRestrictionProvider()
+        }
+        if (
+            isAutomotive &&
+            checkSelfPermission(carDrivingStatePermission) != PackageManager.PERMISSION_GRANTED
+        ) {
+            drivingStatePermissionLauncher.launch(carDrivingStatePermission)
+        } else {
+            uxRestrictionProvider.connect()
+        }
+        navigationStateProvider = if (isAutomotive && ProviderConfig.usePleosNavigationSdk) {
+            PleosNavigationStateProvider(applicationContext)
+        } else {
+            MockNavigationStateProvider()
+        }
+        navigationStateProvider.connect()
         val stories = LocalStoryGenerator(applicationContext).stories(AgeGroup.ELEMENTARY)
         setContent {
             MaterialTheme {
@@ -96,6 +136,8 @@ class MainActivity : ComponentActivity() {
                         etaProvider = MockEtaProvider(),
                         ttsProvider = ttsProvider,
                         vehicleStateProvider = vehicleStateProvider,
+                        uxRestrictionProvider = uxRestrictionProvider,
+                        navigationStateProvider = navigationStateProvider,
                         planner = StoryPlanner(),
                     )
                 }
@@ -104,6 +146,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        navigationStateProvider.release()
+        uxRestrictionProvider.release()
         vehicleStateProvider.release()
         ttsProvider.release()
         super.onDestroy()
@@ -116,6 +160,8 @@ private fun ArrivalTaleScreen(
     etaProvider: EtaProvider,
     ttsProvider: TtsProvider,
     vehicleStateProvider: VehicleStateProvider,
+    uxRestrictionProvider: UxRestrictionProvider,
+    navigationStateProvider: NavigationStateProvider,
     planner: StoryPlanner,
 ) {
     var remainingSeconds by remember { mutableIntStateOf(10 * 60) }
@@ -127,6 +173,9 @@ private fun ArrivalTaleScreen(
     var etaJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
     val vehicleState by vehicleStateProvider.state.collectAsState()
+    val uxState by uxRestrictionProvider.state.collectAsState()
+    val navigationState by navigationStateProvider.state.collectAsState()
+    val autoStartGate = remember { TripAutoStartGate() }
 
     fun stopStory() {
         playbackJob?.cancel()
@@ -170,6 +219,14 @@ private fun ArrivalTaleScreen(
 
     BackHandler(enabled = isPlaying, onBack = ::stopStory)
 
+    LaunchedEffect(navigationState.isRouteDriving) {
+        if (autoStartGate.onRouteDrivingChanged(navigationState.isRouteDriving)) {
+            startStory()
+        } else if (!navigationState.isRouteDriving && isPlaying) {
+            stopStory()
+        }
+    }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -187,13 +244,15 @@ private fun ArrivalTaleScreen(
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                StoryScene(
-                    story = selectedStory,
-                    modifier = Modifier
-                        .weight(1.08f)
-                        .fillMaxHeight()
-                        .padding(vertical = 10.dp),
-                )
+                if (uxState.mode == DrivingSafetyMode.PARKED) {
+                    StoryScene(
+                        story = selectedStory,
+                        modifier = Modifier
+                            .weight(1.08f)
+                            .fillMaxHeight()
+                            .padding(vertical = 10.dp),
+                    )
+                }
                 StoryControls(
                     stories = stories,
                     selectedStory = selectedStory,
@@ -201,6 +260,17 @@ private fun ArrivalTaleScreen(
                     remainingSeconds = remainingSeconds,
                     currentChapter = currentChapter,
                     vehicleState = vehicleState,
+                    uxState = uxState,
+                    navigationState = navigationState,
+                    onMockDrivingToggle = {
+                        (uxRestrictionProvider as? MockUxRestrictionProvider)?.let { mockUx ->
+                            val driving = uxState.mode == DrivingSafetyMode.PARKED
+                            mockUx.setDriving(driving)
+                            (navigationStateProvider as? MockNavigationStateProvider)
+                                ?.setRouteDriving(driving)
+                        }
+                    },
+                    showMockToggle = uxRestrictionProvider.isMock && navigationStateProvider.isMock,
                     status = status,
                     isPlaying = isPlaying,
                     onPlayToggle = ::startStory,
@@ -218,12 +288,14 @@ private fun ArrivalTaleScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                StoryScene(
-                    story = selectedStory,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp),
-                )
+                if (uxState.mode == DrivingSafetyMode.PARKED) {
+                    StoryScene(
+                        story = selectedStory,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp),
+                    )
+                }
                 StoryControls(
                     stories = stories,
                     selectedStory = selectedStory,
@@ -231,6 +303,17 @@ private fun ArrivalTaleScreen(
                     remainingSeconds = remainingSeconds,
                     currentChapter = currentChapter,
                     vehicleState = vehicleState,
+                    uxState = uxState,
+                    navigationState = navigationState,
+                    onMockDrivingToggle = {
+                        (uxRestrictionProvider as? MockUxRestrictionProvider)?.let { mockUx ->
+                            val driving = uxState.mode == DrivingSafetyMode.PARKED
+                            mockUx.setDriving(driving)
+                            (navigationStateProvider as? MockNavigationStateProvider)
+                                ?.setRouteDriving(driving)
+                        }
+                    },
+                    showMockToggle = uxRestrictionProvider.isMock && navigationStateProvider.isMock,
                     status = status,
                     isPlaying = isPlaying,
                     onPlayToggle = ::startStory,
@@ -242,13 +325,17 @@ private fun ArrivalTaleScreen(
 }
 
 @Composable
-private fun StoryScene(story: Story, modifier: Modifier = Modifier) {
+private fun StoryScene(
+    story: Story,
+    modifier: Modifier = Modifier,
+    visible: Boolean = true,
+) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(32.dp))
             .background(Color(0xFF202747)),
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        if (visible) Canvas(Modifier.fillMaxSize()) {
             drawRect(
                 Brush.verticalGradient(
                     listOf(Color(0xFF252B52), Color(0xFF535478), Color(0xFF202747)),
@@ -402,6 +489,10 @@ private fun StoryControls(
     remainingSeconds: Int,
     currentChapter: String,
     vehicleState: io.github.aruru10313.arrivaltale.data.VehicleSnapshot,
+    uxState: io.github.aruru10313.arrivaltale.data.UxRestrictionSnapshot,
+    navigationState: io.github.aruru10313.arrivaltale.data.NavigationSnapshot,
+    onMockDrivingToggle: () -> Unit,
+    showMockToggle: Boolean,
     status: String,
     isPlaying: Boolean,
     onPlayToggle: () -> Unit,
@@ -420,43 +511,78 @@ private fun StoryControls(
             fontWeight = FontWeight.SemiBold,
         )
         Text(
+            if (uxState.mode == DrivingSafetyMode.DRIVING) {
+                "주행 안전 모드"
+            } else {
+                "주차 모드 · 이야기 선택"
+            },
+            color = if (uxState.mode == DrivingSafetyMode.DRIVING) Gold else Muted,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (navigationState.error != null) {
+            Text(
+                "내비 상태를 확인할 수 없습니다",
+                color = Color(0xFFFFB4A9),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            Text(
+                "내비 상태  ${navigationState.status}",
+                color = Muted,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
             status,
             color = Muted,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
             maxLines = 2,
         )
-        VehicleStateCard(vehicleState)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            stories.forEach { story ->
-                val selected = story == selectedStory
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(58.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .clickable(enabled = !isPlaying) { onStorySelected(story) },
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (selected) Color(0xFF554878) else Panel,
-                    tonalElevation = if (selected) 4.dp else 0.dp,
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
+        if (uxState.mode == DrivingSafetyMode.PARKED) {
+            VehicleStateCard(vehicleState)
+        }
+        if (uxState.mode == DrivingSafetyMode.PARKED) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                stories.forEach { story ->
+                    val selected = story == selectedStory
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(58.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .clickable(enabled = !isPlaying) { onStorySelected(story) },
+                        shape = RoundedCornerShape(18.dp),
+                        color = if (selected) Color(0xFF554878) else Panel,
+                        tonalElevation = if (selected) 4.dp else 0.dp,
                     ) {
-                        Text(story.theme.label, color = if (selected) Gold else Muted, fontSize = 17.sp)
-                        Text(
-                            if (selected) "선택됨" else "선택",
-                            color = Color.White.copy(alpha = .72f),
-                            fontSize = 11.sp,
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(story.theme.label, color = if (selected) Gold else Muted, fontSize = 17.sp)
+                            Text(
+                                if (selected) "선택됨" else "선택",
+                                color = Color.White.copy(alpha = .72f),
+                                fontSize = 11.sp,
+                            )
+                        }
                     }
-
                 }
             }
+        } else {
+            Text(
+                "주행 중에는 동화 장면과 주제 선택을 숨깁니다",
+                color = Muted,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+            )
         }
         Button(
             onClick = onPlayToggle,
@@ -500,6 +626,21 @@ private fun StoryControls(
                     )
                 }
             }
+        }
+        if (showMockToggle) {
+            Text(
+                if (uxState.mode == DrivingSafetyMode.PARKED) {
+                    "시연: 주행 시작"
+                } else {
+                    "시연: 주차로 전환"
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = onMockDrivingToggle)
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                color = Muted,
+                fontSize = 13.sp,
+            )
         }
         Text("화면을 보지 않아도 음성으로 함께 즐겨요", color = Muted, fontSize = 13.sp)
     }

@@ -49,6 +49,9 @@ android {
 }
 
 dependencies {
+    // AAOS optional platform API; present on automotive builds, absent on phones.
+    compileOnly(files("${android.sdkDirectory}/platforms/android-35/optional/android.car.jar"))
+
     // Pleos Connect SDK (공식 Maven 저장소)
     // Vehicle State / NaviHelper 는 신청 없이 사용 가능한 모듈.
     implementation("ai.pleos.playground:NaviHelper:3.0.5")
