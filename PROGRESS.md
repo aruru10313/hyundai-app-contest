@@ -444,6 +444,7 @@
 - 10분/5분/ETA 단축 시나리오를 포함한 순수 Kotlin 단위 테스트 추가.
 - 로컬 JDK 17 + Android SDK에서 `testDebugUnitTest assembleDebug` 통과.
 - JSON 파싱 및 동화 개수/챕터 분량 확인 완료.
+- GitHub Actions run `39904083638`에서 JVM 테스트, APK 빌드 및 `app-debug-apk` 업로드 성공.
 
 ### 확인된 사실
 

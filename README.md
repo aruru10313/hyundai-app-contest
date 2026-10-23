@@ -17,13 +17,17 @@ gh run list --limit 3
 gh run view <run-id> --log-failed
 ```
 
-> 현재는 Step 1(문서/CI 골격)이라 Gradle 프로젝트가 없습니다.
-> `gradlew`가 커밋되는 Step 2부터 빌드 job이 자동으로 활성화됩니다.
+현재 MVP는 Mock ETA, Android 기본 한국어 TTS, 로컬 JSON 동화 3편으로 동작합니다.
+NaviHelper의 ETA 단위와 Pleos TTS 사용 승인을 확인하기 전까지는 실제 SDK 연동을 기본 경로로 사용하지 않습니다.
 
-## 구조 (예정)
+최근 확인된 빌드: commit `29cb05c`, GitHub Actions run `39904083638` 성공.
+성공한 run의 Artifacts에 `app-debug-apk`가 업로드됩니다.
+
+## 구조
 
 ```text
-ui/      운전자 화면 (큰 글씨, 버튼 1~2개)
-domain/  StoryPlanner — ETA에 맞춘 동화 길이 배분 (순수 Kotlin + JVM 테스트)
-data/    EtaProvider / TtsProvider / StoryGenerator (Pleos 구현 + Mock/Fallback)
+app/src/main/java/.../MainActivity.kt  큰 버튼 기반 운전자 화면
+domain/                                StoryPlanner — ETA에 맞춘 챕터 계획 + JVM 테스트
+data/                                  EtaProvider / TtsProvider / StoryGenerator
+app/src/main/assets/stories.json      오프라인 동화 라이브러리
 ```
