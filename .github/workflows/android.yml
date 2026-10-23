@@ -53,15 +53,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        if: steps.gradle.outputs.ready == 'true'
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
         if: steps.gradle.outputs.ready == 'true'
         run: |
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-          sdkmanager --list_installed
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          "$SDKMANAGER" --list_installed
 
       - name: Set up Gradle
         if: steps.gradle.outputs.ready == 'true'
