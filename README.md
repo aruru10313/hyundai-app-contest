@@ -18,6 +18,7 @@ gh run view <run-id> --log-failed
 ```
 
 현재 MVP는 Mock ETA, Android 기본 한국어 TTS, 로컬 JSON 동화 3편으로 동작합니다.
+동화 선택 화면은 별도 3D 엔진 없이 Compose Canvas의 명암·그라데이션을 사용한 입체감 있는 장면과 큰 차량용 조작부로 구성했습니다.
 NaviHelper의 ETA 단위와 Pleos TTS 사용 승인을 확인하기 전까지는 실제 SDK 연동을 기본 경로로 사용하지 않습니다.
 
 최근 확인된 빌드: commit `29cb05c`, GitHub Actions run `39904083638` 성공.
