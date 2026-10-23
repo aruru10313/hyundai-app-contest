@@ -12,6 +12,9 @@
   - `gradlew`가 아직 없으므로 빌드 job은 조건부로 skip되고, Step 2에서 wrapper 커밋 시 자동 활성화.
 - `.gitignore`에 Android/Gradle/IDE 산출물, `local.properties`, `*.keystore`, `*.jks` 포함.
 - 이 단계에서는 애플리케이션 코드를 작성하지 않음.
+- Actions 검증 완료: run `39900125052` 성공 (5s, `Repository check and Android build`).
+  - 1차 run `39899981347`은 job-level `if`에서 `hashFiles()`를 쓴 것이 원인으로 즉시 실패
+    (`Unrecognized function: 'hashFiles'`). step-level 조건으로 옮겨 해결.
 
 ## 확인된 사실
 
