@@ -15,3 +15,8 @@
 
 # android.car is provided by the head unit at runtime (compileOnly).
 -dontwarn android.car.**
+
+# SceneView / Filament: native code calls back into these classes by name.
+-keep class com.google.android.filament.** { *; }
+-keep class io.github.sceneview.** { *; }
+-dontwarn com.google.android.filament.**

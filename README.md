@@ -8,7 +8,7 @@
 
 | 순간 | 기능 |
 |---|---|
-| 타기 전 (주차) | **내 차 홈**: 3D 차량에 문·전조등·창문 상태 표시, 주행 가능 거리, 퀵 컨트롤(문 잠금·공조·전조등·창문), 실내 온도 조절 |
+| 타기 전 (주차) | **내 차 홈**: 실사형 3D 차량(드래그로 회전, 세단/SUV·색상 선택)과 문·창문·전조등 상태, 주행 가능 거리, 퀵 컨트롤(문 잠금·공조·전조등·창문), 실내 온도 조절 |
 | 출발 | **원터치 "출발 준비"**: 공조 22℃ · 창문 닫기 · 문 잠금 · 전조등을 한 번에. 이미 된 항목은 건너뜀 |
 | 주행 중 | **휴식 코치**: 연속 운전 2시간 전에 휴게소 안내 (도착이 먼저면 생략)<br>**주행 가능 거리 체크**: 남은 경로 + 안전 여유와 비교해 충분 / 빠듯 / 부족 판단<br>**음성 브리핑·음성 명령**: "얼마나 남았어", "에어컨 켜 줘", "온도 22도" |
 | 도착 | **하차 모드**: 창문·전조등·공조 정리, 잠기지 않은 문 안내, 주차 위치 기록 |
@@ -79,7 +79,9 @@ Pleos 헤드유닛에서도 시연 모드로 보려면 `ProviderConfig.forceDemo
 
 ```text
 MainActivity.kt          탭(내 차 / 드라이브 케어), 주행 화면, 음성·루틴 연결
-ui/                      VehicleHome(차량 홈), Car3D(3D 차량), Theme
+ui/                      VehicleHome(차량 홈), CarModelView(glTF 3D 차량), Car3D(대체용 Canvas 차량), Theme(Pleos 디자인 토큰)
+assets/models/           SUV·세단 × 화이트/그레이/블루 GLB
+tools/export_car.py      3D 모델 분리·재색상화 스크립트
 domain/                  DriveCare(휴식·주행 가능 거리·경고), CarRoutines(출발/하차 루틴), VoiceCommand — 순수 Kotlin + JVM 테스트
 data/                    Vehicle / Navigation / UxRestriction / TTS / VoiceInput / ParkingLocation Provider
                          (Pleos·AAOS 구현 + 폴백, DemoDrive 시연 데이터)
@@ -94,4 +96,11 @@ data/                    Vehicle / Navigation / UxRestriction / TTS / VoiceInput
 | Kotlin 표준 라이브러리, kotlin-reflect, kotlinx.coroutines | Apache License 2.0 |
 | JUnit 4 (테스트) | Eclipse Public License 1.0 |
 
-3D 차량은 외부 모델이나 엔진 없이 Compose Canvas로 직접 그리며, 현대자동차그룹의 로고·서체·브랜드 에셋은 사용하지 않습니다.
+| SceneView 2.3.0 (Filament 기반 glTF 렌더러) | Apache License 2.0 |
+| 3D 차량 모델 "Generic passenger car pack" | CC BY 4.0 (아래 출처 표기) |
+
+### 3D 차량 모델 출처 (CC BY 4.0)
+
+This work is based on "[Generic passenger car pack](https://sketchfab.com/3d-models/generic-passenger-car-pack-20f9af9b8a404d5cb022ac6fe87f21f5)" by [Comrade1280](https://sketchfab.com/comrade1280) licensed under [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/).
+
+변경 사항: 팩에서 SUV·세단만 분리, 실제 크기로 축척·정렬, 도장 텍스처를 화이트/그레이/블루로 재색상화(`tools/export_car.py`). 원작자 설명에 따르면 실제 차량과 유사성이 없는 범용 모델이며, 현대자동차그룹의 로고·서체·브랜드 에셋은 사용하지 않습니다. 앱 안의 드라이브 케어 탭 하단에도 출처를 표시합니다.

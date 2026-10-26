@@ -671,3 +671,25 @@
 
 - 팀명이 정해지지 않아 `apk/` 폴더의 APK는 아직 커밋하지 않음.
 - 저장소 공개 여부 및 심사용 계정 초대는 사용자 결정 필요.
+
+---
+
+## 20. Pleos 에뮬레이터 · 공식 디자인 토큰 · 실사형 3D 차량
+
+최종 업데이트: 2026-10-27
+
+### 완료
+
+- Pleos Connect v2.1.0 시스템 이미지(2560×1440, mdpi) 설치 및 AVD `PleosConnect` 생성(42dot SDK 라이선스 동의는 사용자 확인 후 진행). 에뮬레이터에서 Vehicle·NaviHelper·TTS·STT·FusedLocation 서비스 연결과 실제 값(주행 가능 거리 500km, 배터리 100%, 실내 19.1°, 위치) 확인.
+- 버그 수정: Pleos 이미지에 `CAR_DRIVING_STATE_3P` 권한이 정의되어 있지 않아 권한 요청이 거부되면서 주차 중에도 주행 화면이 뜨던 문제 → 권한이 정의된 경우에만 요청. UX 제한 상태 로그 추가.
+- Pleos Connect UI Design Guide 적용: Grayscale·Surface·Button·Informative 컬러 토큰(라이트/다크, 시스템 테마 추종), 타이포 단계(Headline 60/Title 40/Body 30/Label 24, 헤드유닛 기준, 작은 화면은 비율 축소), 스위치 타일(켜짐 시 반전).
+- 차량 홈 가로 레이아웃(왼쪽 차량, 오른쪽 제어).
+- 실사형 3D 차량: Sketchfab "Generic passenger car pack"(Comrade1280, CC BY 4.0, 실차와 유사성 없는 범용 모델)에서 SUV·세단을 분리해 실제 크기로 정렬하고 화이트/그레이/블루로 재색상화한 GLB 6개(약 4.6MB). SceneView 2.3.0(Filament)으로 렌더링, 드래그 회전. 모델이 없으면 Canvas 차량으로 대체.
+- 출처 표기: README와 앱(드라이브 케어 탭 하단). 변환 스크립트 `tools/export_car.py`.
+- release: Filament keep 규칙 추가, ABI를 arm64-v8a·x86_64로 제한(52MB → 35MB). 에뮬레이터·Z Flip4에서 release 실행 확인, 크래시 없음. versionCode 3 / 1.1.0.
+
+### UNVERIFIED
+
+- 에뮬레이터에서 Door 잠금 상태가 "열림"으로 표시됨(`getDoorLockState` true=잠김 가정). Virtual Console로 값 변경해 의미 확인 필요.
+- Odometer 누적거리 0km 표시(에뮬레이터 기본값인지 단위 문제인지 미확인).
+- 실차 헤드유닛 ABI(arm64 가정).

@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import io.github.aruru10313.drivecare.domain.DoorPosition
 import kotlin.math.PI
 import kotlin.math.cos
@@ -289,8 +290,17 @@ private fun DrawScope.drawLamps(cam: Camera, profile: Profile, headlightsOn: Boo
     }
 }
 
-/** The car shown on the home screen. Swapped for a glTF model renderer when one is bundled. */
+/** The car shown on the home screen: the bundled glTF model, or the Canvas car if it is missing. */
 @Composable
-fun CarView(style: BodyStyle, paint: Color, visual: CarVisualState, modifier: Modifier = Modifier) {
-    Car3D(style = style, paint = paint, visual = visual, modifier = modifier)
+fun CarView(style: BodyStyle, paintIndex: Int, visual: CarVisualState, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val asset = carAsset(style, paintIndex)
+    val hasModel = remember(asset) {
+        runCatching { context.assets.open(asset).close() }.isSuccess
+    }
+    if (hasModel) {
+        CarModelView(asset, modifier)
+    } else {
+        Car3D(style = style, paint = PaintOptions[paintIndex].second, visual = visual, modifier = modifier)
+    }
 }

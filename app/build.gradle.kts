@@ -25,8 +25,11 @@ android {
         minSdk = 28
         // Pleos Connect Emulator 는 API 34 이미지를 사용한다.
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.1.0"
+        // Head units are arm64; the Pleos Connect emulator is x86_64. Dropping 32-bit ABIs keeps
+        // Filament's native libraries from doubling the APK.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
     signingConfigs {
@@ -98,6 +101,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    // glTF car model rendering (Filament). 2.3.0 is the last line built with Kotlin 2.0.
+    implementation("io.github.sceneview:sceneview:2.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

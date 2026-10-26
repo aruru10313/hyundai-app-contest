@@ -653,6 +653,12 @@ private fun ParkedDashboard(
                 fontSize = ts(13),
             )
         }
+        // CC-BY-4.0 attribution for the 3D car models shown on the home tab.
+        Text(
+            "3D 차량 모델: \"Generic passenger car pack\" by Comrade1280 · CC BY 4.0 (sketchfab.com/comrade1280)",
+            color = Muted,
+            fontSize = ts(11),
+        )
     }
 }
 

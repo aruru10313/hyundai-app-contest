@@ -139,9 +139,9 @@ private fun CarStage(
         )
         CarView(
             style = style,
-            paint = PaintOptions[paintIndex].second,
+            paintIndex = paintIndex,
             visual = visual,
-            modifier = Modifier.fillMaxSize().padding(top = 60.dp, bottom = 90.dp),
+            modifier = Modifier.fillMaxSize().padding(top = 56.dp, bottom = 72.dp),
         )
         Column(Modifier.align(Alignment.TopStart).padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -171,7 +171,7 @@ private fun CarStage(
         }
         RangeReadout(car, Modifier.align(Alignment.BottomStart).padding(24.dp))
         Row(
-            Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            Modifier.align(Alignment.TopEnd).padding(20.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             IconChip(Icons.Outlined.DirectionsCar, style.label, onStyleToggle)
