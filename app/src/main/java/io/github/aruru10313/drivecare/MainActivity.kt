@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -107,6 +108,8 @@ import io.github.aruru10313.drivecare.ui.Danger
 import io.github.aruru10313.drivecare.ui.Good
 import io.github.aruru10313.drivecare.ui.Muted
 import io.github.aruru10313.drivecare.ui.PaintOptions
+import io.github.aruru10313.drivecare.ui.Pleos
+import io.github.aruru10313.drivecare.ui.PleosType
 import io.github.aruru10313.drivecare.ui.Panel
 import io.github.aruru10313.drivecare.ui.PanelRaised
 import io.github.aruru10313.drivecare.ui.TextMain
@@ -192,8 +195,11 @@ class MainActivity : ComponentActivity() {
         }
         vehicleStateProvider.connect()
         navigationStateProvider.connect()
+        // Some head units (e.g. the Pleos Connect image) do not define this permission at all;
+        // asking for it then just returns "denied", so only ask where it exists.
+        val permissionDefined = runCatching { packageManager.getPermissionInfo(carDrivingStatePermission, 0) }.isSuccess
         if (
-            isAutomotive &&
+            isAutomotive && permissionDefined &&
             checkSelfPermission(carDrivingStatePermission) != PackageManager.PERMISSION_GRANTED
         ) {
             drivingStatePermissionLauncher.launch(carDrivingStatePermission)
@@ -202,6 +208,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            Pleos.dark = isSystemInDarkTheme()
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Background) {
                     DriveCareScreen(
@@ -330,6 +337,8 @@ private fun DriveCareScreen(
             .padding(horizontal = 24.dp, vertical = 20.dp),
     ) {
         val isLandscape = maxWidth > maxHeight
+        // Pleos type sizes are specified for the 2560x1440 mdpi head unit; shrink them on small screens.
+        PleosType.scale = (minOf(maxWidth.value, maxHeight.value) / 800f).coerceIn(0.55f, 1f)
         if (isParked) {
             val content: @Composable (Modifier) -> Unit = { m ->
                 Box(m) {
@@ -412,7 +421,7 @@ private fun VoiceOverlay(state: VoiceInputState, onCancel: () -> Unit, modifier:
             Icon(Icons.Outlined.Mic, contentDescription = null, tint = Background, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.size(12.dp))
-        Text(text, color = TextMain, fontSize = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(text, color = TextMain, fontSize = ts(17), maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -434,7 +443,7 @@ private fun NavRail(selected: Int, alertCount: Int, vertical: Boolean, onSelect:
             Text(
                 if (index == 1 && alertCount > 0) "$label · $alertCount" else label,
                 color = if (active) TextMain else Muted,
-                fontSize = 13.sp,
+                fontSize = ts(13),
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
             )
@@ -487,19 +496,19 @@ private fun DrivingView(
                 .padding(28.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("주행 안전 모드", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text("주행 안전 모드", color = Muted, fontSize = ts(16), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(10.dp))
             Text(
                 headlineText,
                 color = accent,
-                fontSize = 36.sp,
+                fontSize = ts(36),
                 fontWeight = FontWeight.Bold,
-                lineHeight = 42.sp,
+                lineHeight = ts(42),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(14.dp))
-            Text(tripLine, color = TextMain, fontSize = 22.sp, lineHeight = 30.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(tripLine, color = TextMain, fontSize = ts(22), lineHeight = ts(30), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
     val facts: @Composable (Modifier) -> Unit = { modifier ->
@@ -557,12 +566,12 @@ private fun FactTile(label: String, value: String, accent: Color, modifier: Modi
             .padding(20.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(label, color = Muted, fontSize = 16.sp, maxLines = 1)
+        Text(label, color = Muted, fontSize = ts(16), maxLines = 1)
         Spacer(Modifier.height(6.dp))
         Text(
             value,
             color = accent,
-            fontSize = 26.sp,
+            fontSize = ts(26),
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             softWrap = false,
@@ -581,7 +590,7 @@ private fun BriefingButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         Icon(Icons.Outlined.VolumeUp, contentDescription = null, modifier = Modifier.size(30.dp))
         Spacer(Modifier.width(12.dp))
-        Text("브리핑", fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+        Text("브리핑", fontSize = ts(22), fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
     }
 }
 
@@ -603,7 +612,7 @@ private fun ParkedDashboard(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("드라이브 케어", color = TextMain, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                Text("드라이브 케어", color = TextMain, fontSize = ts(30), fontWeight = FontWeight.Bold)
                 Text(
                     if (trip.arrived) {
                         "${trip.destinationName ?: "목적지"} 도착 · 내리기 전에 확인하세요"
@@ -611,7 +620,7 @@ private fun ParkedDashboard(
                         "주차 중 · 내비 ${navigationError?.let { "연결 안 됨" } ?: navigationStatus}"
                     },
                     color = Muted,
-                    fontSize = 15.sp,
+                    fontSize = ts(15),
                 )
             }
             SourceChip(vehicleState)
@@ -641,7 +650,7 @@ private fun ParkedDashboard(
             Text(
                 "이 차량에서 확인할 수 없는 항목: ${vehicleState.unavailable.sorted().joinToString(", ")}",
                 color = Muted,
-                fontSize = 13.sp,
+                fontSize = ts(13),
             )
         }
     }
@@ -659,7 +668,7 @@ private fun SourceChip(state: VehicleSnapshot) {
     ) {
         Box(Modifier.size(9.dp).clip(CircleShape).background(if (ok) Good else Danger))
         Spacer(Modifier.size(8.dp))
-        Text(if (ok) state.source else "차량 연결 오류", color = TextMain, fontSize = 13.sp)
+        Text(if (ok) state.source else "차량 연결 오류", color = TextMain, fontSize = ts(13))
     }
 }
 
@@ -677,7 +686,7 @@ private fun AlertRow(alert: CareAlert) {
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(color))
         Spacer(Modifier.size(12.dp))
-        Text(alert.title, color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(alert.title, color = TextMain, fontSize = ts(18), fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -690,7 +699,7 @@ private fun DashCard(title: String, modifier: Modifier, content: @Composable Col
             .padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(title, color = Muted, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = Muted, fontSize = ts(15), fontWeight = FontWeight.SemiBold)
         content()
     }
 }
@@ -717,13 +726,13 @@ private fun Meter(fraction: Float, color: Color) {
 @Composable
 private fun RestCard(drivenSeconds: Int?, rest: RestAdvice, modifier: Modifier) {
     DashCard("휴식 코치", modifier) {
-        Text(restShort(rest), color = restColor(rest), fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Text(restShort(rest), color = restColor(rest), fontSize = ts(30), fontWeight = FontWeight.Bold)
         Meter((drivenSeconds ?: 0) / (2f * 60 * 60), restColor(rest))
         Text(
             drivenSeconds?.let { "연속 운전 ${formatDuration(it)} / 2시간마다 15분 휴식" }
                 ?: "출발하면 연속 운전 시간을 잽니다",
             color = Muted,
-            fontSize = 14.sp,
+            fontSize = ts(14),
         )
     }
 }
@@ -739,7 +748,7 @@ private fun RangeCard(
 ) {
     val what = if (energyType == EnergyType.EV) "배터리" else "연료"
     DashCard("주행 가능 거리", modifier) {
-        Text(rangeMeters?.let(::formatKm) ?: "--", color = rangeColor(range), fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Text(rangeMeters?.let(::formatKm) ?: "--", color = rangeColor(range), fontSize = ts(30), fontWeight = FontWeight.Bold)
         Meter((energyPercent ?: 0) / 100f, rangeColor(range))
         Text(
             listOfNotNull(
@@ -747,7 +756,7 @@ private fun RangeCard(
                 trip.remainingRouteMeters?.takeIf { !trip.arrived }?.let { "남은 경로 ${formatKm(it)}" },
             ).joinToString("  ·  ").ifEmpty { "$what 정보를 기다리는 중" },
             color = Muted,
-            fontSize = 14.sp,
+            fontSize = ts(14),
         )
         Text(
             when (range) {
@@ -757,7 +766,7 @@ private fun RangeCard(
                 RangeAdvice.Unknown -> if (trip.arrived) "도착 완료" else "경로를 안내받으면 도착 가능 여부를 알려드려요"
             },
             color = TextMain,
-            fontSize = 15.sp,
+            fontSize = ts(15),
         )
     }
 }
@@ -786,12 +795,12 @@ private fun CheckLine(label: String, value: String?, ok: Boolean?) {
                 false -> Danger
                 null -> Muted
             },
-            fontSize = 18.sp,
+            fontSize = ts(18),
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(end = 10.dp),
         )
-        Text(label, color = TextMain, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        Text(value ?: "확인 불가", color = if (ok == false) Danger else Muted, fontSize = 15.sp)
+        Text(label, color = TextMain, fontSize = ts(16), modifier = Modifier.weight(1f))
+        Text(value ?: "확인 불가", color = if (ok == false) Danger else Muted, fontSize = ts(15))
     }
 }
 
@@ -810,7 +819,7 @@ private fun DemoControls(demo: DemoDrive, arrived: Boolean, exitChecksDone: Bool
     Text(
         "시연 모드 · 실제 Pleos 차량에서는 순정 내비와 차량 상태를 자동으로 읽습니다",
         color = Muted,
-        fontSize = 12.sp,
+        fontSize = ts(12),
         textAlign = TextAlign.Start,
     )
 }
@@ -825,7 +834,7 @@ private fun DemoChip(label: String, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 12.dp),
         color = TextMain,
-        fontSize = 14.sp,
+        fontSize = ts(14),
     )
 }
 
@@ -850,3 +859,6 @@ private fun rangeColor(range: RangeAdvice) = when (range) {
     RangeAdvice.Unknown -> Muted
     is RangeAdvice.Enough -> Good
 }
+
+/** Text sizes in this file were tuned for a phone; scale them with the Pleos type scale. */
+private fun ts(phoneSp: Int) = (phoneSp * PleosType.scale * 1.6f).sp

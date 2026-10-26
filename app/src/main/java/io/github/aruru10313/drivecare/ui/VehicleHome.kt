@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,14 +25,14 @@ import androidx.compose.material.icons.outlined.AcUnit
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.LocalGasStation
+import androidx.compose.material.icons.outlined.LocalParking
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
-import androidx.compose.material.icons.outlined.LocalParking
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Remove
-import androidx.compose.material.icons.outlined.Sensors
 import androidx.compose.material.icons.outlined.Window
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -42,11 +43,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.aruru10313.drivecare.data.ParkedSpot
 import io.github.aruru10313.drivecare.data.VehicleSnapshot
 import io.github.aruru10313.drivecare.domain.CarSnapshot
@@ -58,7 +57,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Parked home screen: the car in 3D, its status at a glance, one-touch routine and controls. */
+/**
+ * Parked home screen laid out for a landscape head unit: the car fills the left, controls sit on
+ * the right within thumb reach of the driver. Falls back to a single column on portrait screens.
+ */
 @Composable
 fun VehicleHome(
     vehicleState: VehicleSnapshot,
@@ -77,76 +79,82 @@ fun VehicleHome(
     modifier: Modifier = Modifier,
 ) {
     val car = vehicleState.car
+    val stage: @Composable (Modifier) -> Unit = { m ->
+        CarStage(car, style, paintIndex, isDemo, onStyleToggle, onPaintNext, m)
+    }
+    val controls: @Composable (Modifier) -> Unit = { m ->
+        Column(m, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("차량 제어", color = Muted, style = PleosType.labelMedium, modifier = Modifier.weight(1f))
+                RoundIconButton(Icons.Outlined.Mic, "음성 명령", onClick = onVoice)
+            }
+            SwitchGrid(car, onAction)
+            ClimateRow(car, onAction)
+            RoutineButton(suggestedRoutine, routineMessage ?: vehicleState.controlMessage, onRoutine)
+            parkedSpot?.let { ParkingRow(it) }
+        }
+    }
+
+    if (isLandscape) {
+        Row(modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            stage(Modifier.weight(1.3f).fillMaxHeight())
+            controls(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()))
+        }
+    } else {
+        Column(
+            modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            stage(Modifier.fillMaxWidth().aspectRatio(0.95f))
+            controls(Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/** The car on a softly lit floor, with name, status and remaining range laid over it. */
+@Composable
+private fun CarStage(
+    car: CarSnapshot,
+    style: BodyStyle,
+    paintIndex: Int,
+    isDemo: Boolean,
+    onStyleToggle: () -> Unit,
+    onPaintNext: () -> Unit,
+    modifier: Modifier,
+) {
     val visual = CarVisualState(
         unlockedDoors = car.doorLocked.filterValues { !it }.keys,
         headlightsOn = car.headlightsOn == true,
         windowsOpen = car.windowsOpen == true,
     )
-    val hero: @Composable (Modifier) -> Unit = { m ->
-        Box(m) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Brush.radialGradient(listOf(Color(0xFF1F2933), Background))),
-            )
-            Car3D(
-                style = style,
-                paint = PaintOptions[paintIndex].second,
-                visual = visual,
-                modifier = Modifier.fillMaxSize(),
-            )
-            Row(
-                Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                IconChip(Icons.Outlined.DirectionsCar, style.label, onStyleToggle)
-                IconChip(Icons.Outlined.Palette, PaintOptions[paintIndex].first, onPaintNext)
-            }
-        }
-    }
-    val details: @Composable (Modifier) -> Unit = { m ->
-        Column(m, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            RangeSummary(car)
-            QuickControls(car, onAction)
-            RoutineButton(suggestedRoutine, routineMessage ?: vehicleState.controlMessage, onRoutine)
-            ClimateRow(car, onAction)
-            StatusRow(car)
-            parkedSpot?.let { ParkingRow(it) }
-        }
-    }
-
-    Column(modifier.fillMaxSize()) {
-        Header(car, style, isDemo, onVoice)
-        if (isLandscape) {
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                hero(Modifier.weight(1.2f).fillMaxHeight())
-                details(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()))
-            }
-        } else {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                hero(Modifier.fillMaxWidth().height(290.dp))
-                details(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun Header(car: CarSnapshot, style: BodyStyle, isDemo: Boolean, onVoice: () -> Unit) {
-    Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(28.dp))
+            .background(Brush.verticalGradient(listOf(Panel, Background))),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.radialGradient(listOf(PanelRaised.copy(alpha = .9f), Color.Transparent))),
+        )
+        CarView(
+            style = style,
+            paint = PaintOptions[paintIndex].second,
+            visual = visual,
+            modifier = Modifier.fillMaxSize().padding(top = 60.dp, bottom = 90.dp),
+        )
+        Column(Modifier.align(Alignment.TopStart).padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("내 ${style.label}", color = TextMain, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+                Text("내 ${style.label}", color = TextMain, style = PleosType.titleLarge)
                 if (isDemo) {
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(12.dp))
                     Text(
                         "DEMO",
                         color = Muted,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
+                        style = PleosType.labelSmall,
                         modifier = Modifier
-                            .border(1.dp, Muted.copy(alpha = .5f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                            .border(1.dp, Faint, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
                     )
                 }
             }
@@ -154,101 +162,201 @@ private fun Header(car: CarSnapshot, style: BodyStyle, isDemo: Boolean, onVoice:
                 listOfNotNull(
                     "주차됨",
                     car.odometerMeters?.let { "%,d km".format(Locale.ROOT, it / 1000) },
+                    car.cabinTempC?.let { "실내 %.1f°".format(Locale.ROOT, it) },
                 ).joinToString("  ·  "),
                 color = Muted,
-                fontSize = 14.sp,
+                style = PleosType.bodySmall,
             )
+            StatusBadges(car)
         }
-        RoundIconButton(Icons.Outlined.Mic, "음성 명령", onVoice)
+        RangeReadout(car, Modifier.align(Alignment.BottomStart).padding(24.dp))
+        Row(
+            Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            IconChip(Icons.Outlined.DirectionsCar, style.label, onStyleToggle)
+            IconChip(Icons.Outlined.Palette, PaintOptions[paintIndex].first, onPaintNext)
+        }
+    }
+}
+
+/** Only problems get a badge; a calm car shows nothing extra. */
+@Composable
+private fun StatusBadges(car: CarSnapshot) {
+    val unlocked = DoorPosition.entries.filter { car.doorLocked[it] == false }
+    val badges = buildList {
+        if (unlocked.isNotEmpty()) add(unlocked.joinToString(", ") { it.label } + " 문 열림" to Danger)
+        if (car.windowsOpen == true) add("창문 열림" to Caution)
+        if (car.headlightsOn == true) add("전조등 켜짐" to Muted)
+    }
+    if (badges.isEmpty()) return
+    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        badges.forEach { (text, color) ->
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(color.copy(alpha = .16f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+                Spacer(Modifier.width(8.dp))
+                Text(text, color = TextMain, style = PleosType.labelSmall)
+            }
+        }
     }
 }
 
 @Composable
-private fun RangeSummary(car: CarSnapshot) {
+private fun RangeReadout(car: CarSnapshot, modifier: Modifier) {
     val percent = car.energyPercent
     val low = (percent ?: 100) <= 15
-    val barColor = if (low) Caution else Good
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 car.rangeRemainingMeters?.let { (it / 1000).toString() } ?: "--",
                 color = TextMain,
-                fontSize = 44.sp,
-                fontWeight = FontWeight.Light,
+                style = PleosType.headlineLarge,
             )
-            Text(" km", color = Muted, fontSize = 18.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Text(" km", color = Muted, style = PleosType.bodyLarge, modifier = Modifier.padding(bottom = 10.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(160.dp).height(6.dp).clip(RoundedCornerShape(50)).background(PanelRaised)) {
+            Icon(
+                Icons.Outlined.LocalGasStation,
+                contentDescription = null,
+                tint = if (low) Caution else Muted,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.width(140.dp).height(6.dp).clip(RoundedCornerShape(50)).background(PanelAccent)) {
                 Box(
                     Modifier
                         .fillMaxWidth(((percent ?: 0) / 100f).coerceIn(0f, 1f))
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(50))
-                        .background(barColor),
+                        .background(if (low) Caution else Good),
                 )
             }
             Spacer(Modifier.width(10.dp))
             Text(
                 "${if (car.energyType == EnergyType.EV) "배터리" else "연료"} ${percent?.let { "$it%" } ?: "--"}",
                 color = if (low) Caution else Muted,
-                fontSize = 13.sp,
+                style = PleosType.labelMedium,
+            )
+        }
+    }
+}
+
+/** Pleos switch buttons: off is a dark surface, on turns light with dark content. */
+@Composable
+private fun SwitchGrid(car: CarSnapshot, onAction: (VehicleAction) -> Unit) {
+    val allLocked = car.doorLocked.isNotEmpty() && car.doorLocked.values.all { it }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SwitchTile(
+                icon = if (allLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
+                title = "도어",
+                state = if (allLocked) "잠김" else "열림",
+                on = allLocked,
+                warn = !allLocked && car.doorLocked.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+            ) { onAction(VehicleAction.LockDoors(!allLocked)) }
+            SwitchTile(
+                icon = Icons.Outlined.AcUnit,
+                title = "공조",
+                state = if (car.climateOn == true) "켜짐" else "꺼짐",
+                on = car.climateOn == true,
+                modifier = Modifier.weight(1f),
+            ) { onAction(VehicleAction.Climate(on = car.climateOn != true, targetC = car.targetTempC ?: 22f)) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SwitchTile(
+                icon = Icons.Outlined.Lightbulb,
+                title = "전조등",
+                state = if (car.headlightsOn == true) "켜짐" else "꺼짐",
+                on = car.headlightsOn == true,
+                modifier = Modifier.weight(1f),
+            ) { onAction(VehicleAction.Headlights(car.headlightsOn != true)) }
+            SwitchTile(
+                icon = Icons.Outlined.Window,
+                title = "창문",
+                state = when (car.windowsOpen) {
+                    true -> "열림 · 닫기"
+                    false -> "닫힘"
+                    null -> "--"
+                },
+                on = car.windowsOpen == false,
+                warn = car.windowsOpen == true,
+                modifier = Modifier.weight(1f),
+            ) { onAction(VehicleAction.CloseWindows) }
+        }
+    }
+}
+
+@Composable
+private fun SwitchTile(
+    icon: ImageVector,
+    title: String,
+    state: String,
+    on: Boolean,
+    modifier: Modifier,
+    warn: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val content = if (on) SwitchOnContent else TextMain
+    Row(
+        modifier
+            .height(96.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (on) SwitchOn else PanelRaised)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = if (warn) Caution else content, modifier = Modifier.size(32.dp))
+        Spacer(Modifier.width(14.dp))
+        Column {
+            Text(title, color = content, style = PleosType.bodySmall, maxLines = 1)
+            Text(
+                state,
+                color = when {
+                    warn -> Caution
+                    on -> SwitchOnContent.copy(alpha = .7f)
+                    else -> Muted
+                },
+                style = PleosType.labelSmall,
+                maxLines = 1,
             )
         }
     }
 }
 
 @Composable
-private fun QuickControls(car: CarSnapshot, onAction: (VehicleAction) -> Unit) {
-    val allLocked = car.doorLocked.isNotEmpty() && car.doorLocked.values.all { it }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        QuickControl(
-            icon = if (allLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
-            label = if (allLocked) "잠김" else "열림",
-            active = allLocked,
-            warn = !allLocked && car.doorLocked.isNotEmpty(),
-        ) { onAction(VehicleAction.LockDoors(!allLocked)) }
-        QuickControl(Icons.Outlined.AcUnit, "공조", active = car.climateOn == true) {
-            onAction(VehicleAction.Climate(on = car.climateOn != true, targetC = car.targetTempC ?: 22f))
+private fun ClimateRow(car: CarSnapshot, onAction: (VehicleAction) -> Unit) {
+    val target = car.targetTempC ?: 22f
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(PanelRaised)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("설정 온도", color = Muted, style = PleosType.labelSmall)
+            Text(
+                "%.1f°".format(Locale.ROOT, target),
+                color = if (car.climateOn == true) Accent else TextMain,
+                style = PleosType.titleMedium,
+            )
         }
-        QuickControl(Icons.Outlined.Lightbulb, "전조등", active = car.headlightsOn == true) {
-            onAction(VehicleAction.Headlights(car.headlightsOn != true))
+        RoundIconButton(Icons.Outlined.Remove, "온도 내리기", size = 56.dp) {
+            onAction(VehicleAction.Climate(on = true, targetC = (target - 0.5f).coerceAtLeast(16f)))
         }
-        QuickControl(
-            Icons.Outlined.Window,
-            if (car.windowsOpen == true) "창문 열림" else "창문",
-            active = car.windowsOpen == false,
-            warn = car.windowsOpen == true,
-        ) { onAction(VehicleAction.CloseWindows) }
-    }
-}
-
-@Composable
-private fun QuickControl(
-    icon: ImageVector,
-    label: String,
-    active: Boolean,
-    warn: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val tint = when {
-        warn -> Caution
-        active -> Background
-        else -> TextMain
-    }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(if (active) Accent else PanelRaised)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(28.dp))
+        Spacer(Modifier.width(12.dp))
+        RoundIconButton(Icons.Outlined.Add, "온도 올리기", size = 56.dp) {
+            onAction(VehicleAction.Climate(on = true, targetC = (target + 0.5f).coerceAtMost(30f)))
         }
-        Spacer(Modifier.height(6.dp))
-        Text(label, color = if (warn) Caution else Muted, fontSize = 12.sp)
     }
 }
 
@@ -259,27 +367,24 @@ private fun RoutineButton(routine: Routine, message: String?, onClick: () -> Uni
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .clip(RoundedCornerShape(32.dp))
-                .background(Brush.horizontalGradient(listOf(color.copy(alpha = .22f), Panel)))
-                .border(1.dp, color.copy(alpha = .6f), RoundedCornerShape(32.dp))
+                .height(88.dp)
+                .clip(RoundedCornerShape(44.dp))
+                .background(Panel)
+                .border(2.dp, color.copy(alpha = .7f), RoundedCornerShape(44.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(48.dp).clip(CircleShape).background(color),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Outlined.PowerSettingsNew, contentDescription = null, tint = Background, modifier = Modifier.size(28.dp))
+            Box(Modifier.size(64.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.PowerSettingsNew, contentDescription = null, tint = Background, modifier = Modifier.size(34.dp))
             }
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(16.dp))
             Column {
-                Text(routine.label, color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(routine.label, color = TextMain, style = PleosType.bodyLarge)
                 Text(
                     if (routine == Routine.DEPARTURE) "공조 · 창문 · 잠금 · 전조등" else "창문 · 전조등 · 공조 정리",
                     color = Muted,
-                    fontSize = 12.sp,
+                    style = PleosType.labelSmall,
                 )
             }
         }
@@ -287,88 +392,9 @@ private fun RoutineButton(routine: Routine, message: String?, onClick: () -> Uni
             Text(
                 it,
                 color = TextMain,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp),
+                style = PleosType.labelMedium,
+                modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
             )
-        }
-    }
-}
-
-@Composable
-private fun ClimateRow(car: CarSnapshot, onAction: (VehicleAction) -> Unit) {
-    val target = car.targetTempC ?: 22f
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text("실내 온도", color = Muted, fontSize = 13.sp)
-            Text(
-                car.cabinTempC?.let { "%.1f°".format(Locale.ROOT, it) } ?: "--",
-                color = TextMain,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        RoundIconButton(Icons.Outlined.Remove, "온도 내리기") {
-            onAction(VehicleAction.Climate(on = true, targetC = (target - 0.5f).coerceAtLeast(16f)))
-        }
-        Column(Modifier.width(78.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "%.1f°".format(Locale.ROOT, target),
-                color = if (car.climateOn == true) Accent else TextMain,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(if (car.climateOn == true) "설정" else "꺼짐", color = Muted, fontSize = 11.sp)
-        }
-        RoundIconButton(Icons.Outlined.Add, "온도 올리기") {
-            onAction(VehicleAction.Climate(on = true, targetC = (target + 0.5f).coerceAtMost(30f)))
-        }
-    }
-}
-
-@Composable
-private fun StatusRow(car: CarSnapshot) {
-    val unlocked = DoorPosition.entries.filter { car.doorLocked[it] == false }
-    val items = listOf(
-        "문" to when {
-            car.doorLocked.isEmpty() -> "--"
-            unlocked.isEmpty() -> "모두 잠김"
-            else -> unlocked.joinToString(", ") { it.label }
-        },
-        "전조등" to when (car.headlightsOn) {
-            true -> "켜짐"
-            false -> "꺼짐"
-            null -> "--"
-        },
-        "창문" to when (car.windowsOpen) {
-            true -> "열림"
-            false -> "닫힘"
-            null -> "--"
-        },
-    )
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(horizontal = 18.dp, vertical = 6.dp),
-    ) {
-        Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Sensors, contentDescription = null, tint = Muted, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("차량 상태", color = Muted, fontSize = 13.sp)
-        }
-        items.forEach { (label, value) ->
-            val bad = value == "열림" || (label == "문" && unlocked.isNotEmpty())
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Text(label, color = TextMain, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                Text(
-                    value,
-                    color = if (bad) Caution else Muted,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.End,
-                )
-            }
         }
     }
 }
@@ -377,31 +403,35 @@ private fun StatusRow(car: CarSnapshot) {
 private fun ParkingRow(spot: ParkedSpot) {
     val time = SimpleDateFormat("M월 d일 HH:mm", Locale.KOREAN).format(Date(spot.timeMillis))
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(horizontal = 18.dp, vertical = 14.dp),
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Panel)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Accent.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.LocalParking, contentDescription = null, tint = Accent)
-        }
+        Icon(Icons.Outlined.LocalParking, contentDescription = null, tint = Accent, modifier = Modifier.size(28.dp))
         Spacer(Modifier.width(14.dp))
         Column {
-            Text(spot.placeName ?: "마지막 주차 위치", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(spot.placeName ?: "마지막 주차 위치", color = TextMain, style = PleosType.bodySmall)
             Text(
                 "$time  ·  %.4f, %.4f".format(Locale.ROOT, spot.latitude, spot.longitude),
                 color = Muted,
-                fontSize = 12.sp,
+                style = PleosType.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
 
 @Composable
-internal fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+internal fun RoundIconButton(icon: ImageVector, description: String, size: Dp = 52.dp, onClick: () -> Unit) {
     Box(
-        Modifier.size(44.dp).clip(CircleShape).background(PanelRaised).clickable(onClick = onClick),
+        Modifier.size(size).clip(CircleShape).background(PanelAccent).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = TextMain, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = description, tint = TextMain, modifier = Modifier.size(size * 0.48f))
     }
 }
 
@@ -410,14 +440,13 @@ private fun IconChip(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(PanelRaised.copy(alpha = .8f))
+            .background(PanelRaised.copy(alpha = .9f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = Muted, modifier = Modifier.size(16.dp))
+        Icon(icon, contentDescription = null, tint = Muted, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
-        Text(label, color = TextMain, fontSize = 12.sp)
+        Text(label, color = TextMain, style = PleosType.labelSmall)
     }
 }
-

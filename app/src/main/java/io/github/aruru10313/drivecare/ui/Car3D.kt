@@ -288,3 +288,9 @@ private fun DrawScope.drawLamps(cam: Camera, profile: Profile, headlightsOn: Boo
         }
     }
 }
+
+/** The car shown on the home screen. Swapped for a glTF model renderer when one is bundled. */
+@Composable
+fun CarView(style: BodyStyle, paint: Color, visual: CarVisualState, modifier: Modifier = Modifier) {
+    Car3D(style = style, paint = paint, visual = visual, modifier = modifier)
+}

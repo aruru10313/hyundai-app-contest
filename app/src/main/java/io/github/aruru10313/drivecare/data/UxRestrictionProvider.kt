@@ -6,6 +6,7 @@ import android.car.drivingstate.CarUxRestrictionsManager
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -104,6 +105,7 @@ class AndroidCarUxRestrictionProvider(context: Context) : UxRestrictionProvider 
                 lifecycleListener,
             )
         } catch (exception: Exception) {
+            Log.w(TAG, "Car.createCar failed", exception)
             mutableState.value = mutableState.value.copy(error = exception.message ?: exception.javaClass.simpleName)
         }
     }
@@ -119,6 +121,7 @@ class AndroidCarUxRestrictionProvider(context: Context) : UxRestrictionProvider 
             registered = true
             update(restrictionsManager.currentCarUxRestrictions)
         } catch (exception: Exception) {
+            Log.w(TAG, "CarUxRestrictionsManager unavailable", exception)
             mutableState.value = mutableState.value.copy(
                 mode = DrivingSafetyMode.DRIVING,
                 requiresDistractionOptimization = true,
@@ -129,6 +132,7 @@ class AndroidCarUxRestrictionProvider(context: Context) : UxRestrictionProvider 
     }
 
     private fun update(restrictions: CarUxRestrictions) {
+        Log.i(TAG, "UX restrictions: requiresDO=${restrictions.isRequiresDistractionOptimization} active=${restrictions.activeRestrictions}")
         val requiresDo = restrictions.isRequiresDistractionOptimization
         mutableState.value = UxRestrictionSnapshot(
             mode = if (requiresDo) DrivingSafetyMode.DRIVING else DrivingSafetyMode.PARKED,
@@ -165,3 +169,5 @@ class AndroidCarUxRestrictionProvider(context: Context) : UxRestrictionProvider 
         }
     }
 }
+
+private const val TAG = "DriveCareUx"
