@@ -4,6 +4,7 @@ import io.github.aruru10313.drivecare.domain.CarSnapshot
 import io.github.aruru10313.drivecare.domain.DoorPosition
 import io.github.aruru10313.drivecare.domain.EnergyType
 import io.github.aruru10313.drivecare.domain.TripSnapshot
+import io.github.aruru10313.drivecare.domain.VehicleAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -38,16 +39,17 @@ class DemoDrive(
 
     fun start() {
         if (isRunning) return
-        mutableVehicle.value = mutableVehicle.value.copy(
-            car = CarSnapshot(
-                tripDrivingSeconds = 92 * 60,
-                rangeRemainingMeters = 70_000,
-                energyPercent = 14,
-                energyType = EnergyType.FUEL,
-                doorLocked = allLocked(),
-                headlightsOn = true,
-            ),
-        )
+        // Keep whatever the driver set up while parked (climate, lights, doors).
+        mutableVehicle.update { snapshot ->
+            snapshot.copy(
+                car = snapshot.car.copy(
+                    tripDrivingSeconds = 92 * 60,
+                    rangeRemainingMeters = 70_000,
+                    energyPercent = 14,
+                    energyType = EnergyType.FUEL,
+                ),
+            )
+        }
         setTrip(TripSnapshot(tripSeconds, routeMeters, "강릉역", isRouteDriving = true), "ROUTE_DRIVE")
         onDrivingChanged(true)
         job = scope.launch {
@@ -71,6 +73,29 @@ class DemoDrive(
         mutableVehicle.update { it.copy(car = it.car.copy(doorLocked = allLocked(), headlightsOn = false)) }
     }
 
+    fun perform(action: VehicleAction) {
+        mutableVehicle.update { snapshot ->
+            val car = snapshot.car
+            snapshot.copy(
+                controlMessage = null,
+                car = when (action) {
+                    is VehicleAction.LockDoors -> car.copy(doorLocked = DoorPosition.entries.associateWith { action.locked })
+                    is VehicleAction.Headlights -> car.copy(headlightsOn = action.on)
+                    is VehicleAction.Climate -> car.copy(climateOn = action.on, targetTempC = action.targetC ?: car.targetTempC)
+                    VehicleAction.CloseWindows -> car.copy(windowsOpen = false)
+                },
+            )
+        }
+    }
+
+    /** Cabin temperature drifts 0.5° per simulated minute toward the target while climate runs. */
+    private fun towardTarget(cabin: Float, car: CarSnapshot): Float {
+        val target = car.targetTempC
+        if (car.climateOn != true || target == null) return cabin
+        val step = 0.5f * speedUp / 60f
+        return if (cabin > target) maxOf(target, cabin - step) else minOf(target, cabin + step)
+    }
+
     /** @return true when the trip has arrived. */
     private fun advance(seconds: Int): Boolean {
         val trip = mutableNavigation.value.trip
@@ -84,6 +109,8 @@ class DemoDrive(
                 car = car.copy(
                     tripDrivingSeconds = (car.tripDrivingSeconds ?: 0) + seconds,
                     rangeRemainingMeters = ((car.rangeRemainingMeters ?: 0) - driven * 21 / 20).coerceAtLeast(0),
+                    odometerMeters = car.odometerMeters?.plus(driven),
+                    cabinTempC = car.cabinTempC?.let { cabin -> towardTarget(cabin, car) },
                 ),
             )
         }
@@ -109,6 +136,11 @@ class DemoDrive(
         energyType = EnergyType.FUEL,
         doorLocked = allLocked(),
         headlightsOn = false,
+        odometerMeters = 23_418_000,
+        climateOn = false,
+        cabinTempC = 27.5f,
+        targetTempC = 24f,
+        windowsOpen = true,
     )
 
     private fun allLocked() = DoorPosition.entries.associateWith { true }

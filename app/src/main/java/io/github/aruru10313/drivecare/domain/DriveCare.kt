@@ -26,6 +26,11 @@ data class CarSnapshot(
     val energyType: EnergyType? = null,
     val doorLocked: Map<DoorPosition, Boolean> = emptyMap(),
     val headlightsOn: Boolean? = null,
+    val odometerMeters: Int? = null,
+    val climateOn: Boolean? = null,
+    val cabinTempC: Float? = null,
+    val targetTempC: Float? = null,
+    val windowsOpen: Boolean? = null,
 )
 
 sealed interface RestAdvice {
@@ -130,7 +135,8 @@ class DriveCareAdvisor(
         val rest = if (trip.arrived) RestAdvice.Unknown else restCoach.advise(car.tripDrivingSeconds, trip.etaSeconds)
         val range = if (trip.arrived) RangeAdvice.Unknown else rangeCheck.advise(car.rangeRemainingMeters, trip.remainingRouteMeters)
         val unlocked = if (isParked) car.doorLocked.filterValues { locked -> !locked }.keys.sorted() else emptyList()
-        val lightsOn = isParked && car.headlightsOn == true
+        // Lights on while parked is normal right before leaving; it only matters once the trip is over.
+        val lightsOn = isParked && trip.arrived && car.headlightsOn == true
 
         val alerts = buildList {
             rangeAlert(range, car.energyType)?.let(::add)

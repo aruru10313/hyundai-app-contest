@@ -18,9 +18,31 @@
     <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
     <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
     <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
+    <!--
+      Vehicle Control (CONTROL_CAR_*): 문 잠금, 전조등, 공조, 창문 제어.
+      Playground 에서 "준비 중" 이므로 승인 전에는 호출이 거부될 수 있다.
+    -->
+    <uses-permission android:name="pleos.car.permission.CAR_CLIMATE" />
+    <uses-permission android:name="pleos.car.permission.CAR_WINDOWS" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_WINDOWS" />
+    <!-- 음성 안내/명령, 주차 위치 (각 SDK declaring-permissions 문서 및 공식 샘플 기준) -->
+    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
+    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
+    <!-- Android 음성 인식 폴백 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- NaviHelper 경로 안내 정보 (공식 navi 샘플 manifest 기준) -->
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
     <uses-permission android:name="android.car.permission.CAR_DRIVING_STATE_3P" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"

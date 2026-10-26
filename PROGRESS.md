@@ -603,3 +603,42 @@
 ### 막힌 점
 
 - 이 PC에 Android Emulator/연결 기기가 없어 화면을 실제로 띄워 확인하지 못함. Pleos Connect Emulator(API 34 이미지)에서 시연 확인 필요.
+
+---
+
+## 18. 차량 홈 화면 · 3D 차량 · 음성 · 전체 SDK 사용
+
+최종 업데이트: 2026-10-27 · 브랜치 `feat/drive-care`
+
+### 완료
+
+- 탭 구조: **내 차**(차량 홈) / **드라이브 케어**. 주행 중에는 기존 DrivingView만 표시(제어 UI 없음).
+- `ui/Car3D.kt`: Compose Canvas로 직접 그리는 3D 차량(원근 투영, 면 셰이딩, 드래그 회전). 세단/SUV, 색상 3종. 잠기지 않은 문은 빨간색, 전조등 켜짐 시 발광. 외부 엔진·에셋 없음(AGENTS.md 3D 규칙 준수).
+- `ui/VehicleHome.kt`: 주행 가능 거리, 퀵 컨트롤 4개, 원터치 루틴(전원 버튼), 실내 온도 ±, 차량 상태, 마지막 주차 위치. 이모지 대신 Material 벡터 아이콘.
+- `domain/CarRoutines.kt`: `RoutinePlanner` 출발 준비 / 하차 모드 (이미 된 항목은 건너뜀) + 테스트.
+- `domain/VoiceCommand.kt`: 한국어 키워드 음성 명령 파서 + 테스트. 주행 중 문 열기 거부.
+- Vehicle Control: `Door.setDoorLock`, `Light.setLowBeamLightSwitch`, `HVAC.setHvacPower/setHvacTemperature`, `Window.setWindowPosition`. 조회 추가: Odometer 누적거리, HVAC 전원/설정/실내 온도, Window 위치.
+- TextToSpeech(ON_DEVICE) → Android TTS 폴백, SpeechToText(ON_DEVICE) → Android SpeechRecognizer 폴백, FusedLocation 주차 위치 기록(SharedPreferences 유지).
+- 버그 수정: 주행 화면 휴식 타일 글자 잘림, 경로 줄 잘림, 출발 준비 직후 "전조등 켜짐" 경고(도착 후에만 경고하도록 변경), 시연 시작 시 주차 중 설정이 초기화되던 문제.
+- Galaxy Z Flip4(SM-F721N)에 설치해 홈 → 출발 준비 → 시연 주행 → 도착 경고까지 화면으로 확인. 크래시 없음. JVM 테스트 26개 통과.
+
+### 확인된 사실 (바이트코드 + 문서)
+
+- 권한 상수(`PleosPermission`): `CONTROL_CAR_DOORS/LIGHTS/CLIMATE/WINDOWS`. 조회 `CAR_CLIMATE`, `CAR_WINDOWS`.
+- TTS `speak(text, isFinal)` — 두 번째 인자는 `isFinal`(start-and-stop 문서). EventListener `onReady/onStart/onDone/onStop/onError/onUpdatedRms`.
+- STT `SpeechToText(context, Mode)`, `initialize(OnInitializeListener)`, `addListener(ResultListener)`, `request()`; `ResultListener.onUpdated(text, isFinal)`.
+- FusedLocation `getLastKnownLocation(FusedLocationListener)`, `LocationData(latitude, longitude, ...)`, 권한 `FUSED_LOCATION`.
+- `CarInfo`는 VIN만 제공 → 차종 이름 API 없음. 앱에서 세단/SUV 선택.
+
+### UNVERIFIED
+
+- Vehicle Control(`CONTROL_CAR_*`)은 Playground "준비 중" → 실차에서 set 호출이 거부될 수 있음. 실패 시 화면에 안내.
+- 단위: Odometer 누적거리(km 가정), Window 위치(0 = 닫힘 가정), HVAC 온도(섭씨 지정).
+- Pleos TTS/STT/FusedLocation 실제 동작(휴대폰에는 Pleos 서비스가 없어 폴백 경로만 확인).
+- 음성 명령의 실제 마이크 입력은 휴대폰에서 권한 승인 후 직접 확인 필요.
+
+### 3D 모델 검토 (적용 보류)
+
+- 현대차 실제 차종 3D 모델은 디자인권/상표 문제로 사용 불가(AGENTS.md도 브랜드 에셋 금지).
+- 무료 범용 모델 후보: Kenney Car Kit(CC0, glTF, 세단/SUV 포함), RG Poly "Cars - Low Poly Massive" 무료판(CC0, glTF).
+- 렌더러 후보: SceneView(Filament 기반 Compose 3D, `io.github.sceneview`). APK 용량 증가 및 헤드유닛 성능 확인 필요 → 사용자 승인 후 적용.

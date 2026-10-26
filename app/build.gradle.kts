@@ -56,9 +56,11 @@ dependencies {
     // Vehicle State / NaviHelper 는 신청 없이 사용 가능한 모듈.
     implementation("ai.pleos.playground:NaviHelper:3.0.5")
     implementation("ai.pleos.playground:Vehicle:2.3.2")
-    // TextToSpeech 는 현재 Playground 에서 "준비 중" 상태.
-    // 코드 경로만 준비하고, 데모 기본값은 폴백 TTS 로 둔다 (PROGRESS.md 참조).
+    // TextToSpeech / SpeechToText / FusedLocation 은 Playground 에서 "준비 중" 상태.
+    // Pleos 구현을 먼저 시도하고, 실패하면 Android 기본 TTS·음성 인식·데모 위치로 폴백한다.
     implementation("ai.pleos.playground:TextToSpeech:3.3.1")
+    implementation("ai.pleos.playground:SpeechToText:3.3.1")
+    implementation("ai.pleos.playground:FusedLocation:1.1.3")
 
     // Kotlin reflect: Vehicle SDK 가 runtime 으로 1.9.25 를 요구하므로 정렬
     implementation("org.jetbrains.kotlin:kotlin-reflect:2.0.0")
@@ -69,6 +71,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
