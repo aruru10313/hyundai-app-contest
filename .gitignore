@@ -6,6 +6,8 @@ captures/
 .externalNativeBuild/
 .cxx/
 *.apk
+# Contest submission: the signed release APK lives in apk/
+!apk/*_release.apk
 *.aab
 *.ap_
 *.dex

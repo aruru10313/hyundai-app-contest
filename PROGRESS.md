@@ -642,3 +642,32 @@
 - 현대차 실제 차종 3D 모델은 디자인권/상표 문제로 사용 불가(AGENTS.md도 브랜드 에셋 금지).
 - 무료 범용 모델 후보: Kenney Car Kit(CC0, glTF, 세단/SUV 포함), RG Poly "Cars - Low Poly Massive" 무료판(CC0, glTF).
 - 렌더러 후보: SceneView(Filament 기반 Compose 3D, `io.github.sceneview`). APK 용량 증가 및 헤드유닛 성능 확인 필요 → 사용자 승인 후 적용.
+
+---
+
+## 19. 참가 가이드 규격 맞춤 (release APK · README)
+
+최종 업데이트: 2026-10-27
+
+### 확인된 사실 (appdevchallenge.auto-hmg.io)
+
+- 필수 제출물은 접수양식(기획서) 1개, 이메일 `appdevchallenge@hyundai-partners.com`, 마감 2026-11-15.
+- 가산점: 시연 영상, GitHub 저장소(소스 + APK). APK는 `apk/` 폴더, 파일명 `팀명_앱이름_release.apk`, 실행 가능한 release 버전.
+- README 필수 항목: 앱 이름·한 줄 소개, 실행 방법, 테스트 환경 및 필요한 설정, APK 위치.
+- 이용약관: 오픈소스 사용 시 라이선스 준수 및 출처 표기. AI 도구 사용 제한 규정은 FAQ·참가 규정·이용약관에서 찾지 못함.
+- 심사 기준: 차량특화성, 창의성, 기술 활용성(Pleos SDK·API), 사업성(타깃·MAU·리텐션·확대 계획).
+- 2차 PT(12/3~4) 전까지 실제 동작 앱 완성 필요. 비공개 저장소는 심사용 계정 Collaborator 초대 필요.
+
+### 완료
+
+- release 서명 설정: `keystore.properties`(Git 제외) 또는 `RELEASE_*` 환경 변수. 키스토어는 저장소 밖에 보관.
+- release 빌드에 R8 축소·리소스 축소 적용(46MB → 16MB), Pleos SDK keep 규칙 추가. 서명 확인(apksigner), `debuggable` 미설정 확인.
+- Z Flip4에 release APK 설치 후 홈 → 출발 준비 → 시연 주행 → 도착 경고까지 동작 확인, 크래시 없음.
+- `./gradlew exportContestApk -PteamName=팀명` 으로 `apk/<팀명>_DriveCare_release.apk` 생성.
+- README를 가이드 필수 항목 구조로 재작성, 오픈소스 출처 표 추가.
+- versionCode 2 / versionName 1.0.0.
+
+### 막힌 점
+
+- 팀명이 정해지지 않아 `apk/` 폴더의 APK는 아직 커밋하지 않음.
+- 저장소 공개 여부 및 심사용 계정 초대는 사용자 결정 필요.

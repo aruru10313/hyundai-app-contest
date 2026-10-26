@@ -1,8 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Release signing comes from keystore.properties (gitignored) or CI environment variables.
+// Without either, the release build is left unsigned and only debug builds are installable.
+val signingProps = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+fun signingValue(key: String, env: String): String? =
+    signingProps.getProperty(key) ?: System.getenv(env)
 
 android {
     namespace = "io.github.aruru10313.drivecare"
@@ -14,13 +25,28 @@ android {
         minSdk = 28
         // Pleos Connect Emulator 는 API 34 이미지를 사용한다.
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        val storeFilePath = signingValue("storeFile", "RELEASE_STORE_FILE")
+        if (storeFilePath != null) {
+            create("release") {
+                storeFile = file(storeFilePath)
+                storePassword = signingValue("storePassword", "RELEASE_STORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "RELEASE_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // App Market: release signing, debugging off (default for release), shrunk with R8.
+            signingConfig = signingConfigs.findByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -77,4 +103,15 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
+}
+
+// Contest submission: copies the signed release APK to apk/<팀명>_DriveCare_release.apk.
+// Usage: ./gradlew exportContestApk -PteamName=팀명
+tasks.register<Copy>("exportContestApk") {
+    val team = providers.gradleProperty("teamName").orNull
+        ?: throw GradleException("팀명을 지정하세요: ./gradlew exportContestApk -PteamName=팀명")
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
+    into(rootProject.layout.projectDirectory.dir("apk"))
+    rename { "${team}_DriveCare_release.apk" }
 }
