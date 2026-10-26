@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.aruru10313.arrivaltale"
+    namespace = "io.github.aruru10313.drivecare"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.aruru10313.arrivaltale"
+        applicationId = "io.github.aruru10313.drivecare"
         // Pleos 공식 요구사항: Android API 28 이상 (PROGRESS.md 참조)
         minSdk = 28
         // Pleos Connect Emulator 는 API 34 이미지를 사용한다.

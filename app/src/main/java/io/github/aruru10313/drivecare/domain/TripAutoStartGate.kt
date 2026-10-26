@@ -1,4 +1,4 @@
-package io.github.aruru10313.arrivaltale.domain
+package io.github.aruru10313.drivecare.domain
 
 class TripAutoStartGate {
     private var wasRouteDriving = false

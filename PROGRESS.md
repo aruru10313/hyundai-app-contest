@@ -564,3 +564,42 @@
 ### 막힌 점
 
 - Pleos Connect Emulator 또는 차량 서비스가 연결된 장치가 없어 실차 주행/주차 UX restrictions 및 자동 시작을 검증할 수 없음.
+
+---
+
+## 17. 컨셉 전환: 드라이브 케어 (동화 기능 제거)
+
+최종 업데이트: 2026-10-26 · 브랜치 `feat/drive-care`
+
+### 완료
+
+- "도착시간 맞춤 AI 동화" 기능을 제거하고(`StoryPlanner`, `StoryGenerator`, `stories.json`, 동화 장면 UI), 패키지를 `io.github.aruru10313.drivecare`로 변경.
+- 순수 Kotlin 도메인 `domain/DriveCare.kt`:
+  - `RestCoach`: 연속 운전 2시간 기준 휴식 안내(15분 전부터 경고), ETA가 먼저면 안내 생략.
+  - `RangeCheck`: 주행 가능 거리 vs 남은 경로 + 여유(max 30km, 경로 15%) → 충분/빠듯/부족.
+  - `DriveCareAdvisor`: 경고 우선순위 정렬, 연료/배터리 15% 이하 경고, 주차 시에만 하차 체크(문 잠금, 전조등).
+  - `AnnouncementGate`: 같은 경고는 1회만, 심각도 상승/재발 시에만 다시 음성 안내.
+- `VehicleStateProvider`(Pleos): Odometer 트립 운전 시간·주행 가능 거리, EvBattery SoC / Fuel %, Door 잠금(1·2열), Light 하향등 상태를 15초 주기로 조회. 실패한 도메인은 화면에 "확인할 수 없는 항목"으로 표시.
+- `NavigationStateProvider`(Pleos): `onDrivingInfo`(남은 시간/거리), `onDestinationInfo`(목적지 이름), `onDestinationArrived`(도착) 추가.
+- `DemoDrive`: Pleos 서비스가 없는 환경에서 30배속 시연 주행(연료 부족 → 휴식 임박 → 도착 → 하차 경고).
+- UI: 주행 중 = 핵심 문장 1개 + 숫자 2개 + 큰 "음성 브리핑" 버튼(스크롤/애니메이션 없음). 주차 중 = 휴식 코치·주행 가능 거리·하차 체크 대시보드.
+- Manifest 권한 추가: `CAR_ENERGY`, `CAR_DOORS`, `CAR_LIGHTS`, `NAVI_ROUTE`.
+- 로컬 `testDebugUnitTest assembleDebug` 통과 (JVM 테스트 17개, 실패 0).
+
+### 확인된 사실 (Vehicle 2.3.2 / NaviHelper 3.0.5 바이트코드 + 공식 문서)
+
+- `Odometer.getTripCurrentDrivingTime(Int)`, `getRangeRemainingDistance(Float)`, `Fuel.getFuelPercent(Int)`, `EvBattery.getEvBatteryStateOfCharge(Int)`, `Door.getDoorLockState(DoorArea, Boolean)`, `Light.getCurrentLowBeamLightState(LightState: OFF/ON/DAYTIME_RUNNING)`.
+- 권한 매핑(vehicle-permission 문서): Odometer→`CAR_DRIVE`, Fuel/EvBattery→`CAR_ENERGY`, Door→`CAR_DOORS`, Light→`CAR_LIGHTS`, Tire→`CAR_SAFETY`.
+- **타이어 공기압은 사용하지 않음**: 공식 vehicle 샘플 `PublicApiPolicy`가 `Tire.getTirePressure`를 차단 목록에 포함.
+- `DrivingInfo.destination: DrivingState(duration, distance, name)`, `DestinationInfo(remainTime, remainDistance, name)`, `onDestinationArrived(DestinationArrivedInfo)`.
+
+### UNVERIFIED
+
+- 단위: 트립 운전 시간(초로 가정), 주행 가능 거리(미터로 가정), NaviHelper duration/distance(초/미터로 가정). 실차/에뮬레이터 값으로 확인 필요.
+- `getDoorLockState`의 true = 잠김 (API 이름 기준 가정).
+- Vehicle SDK 콜백 파라미터의 Kotlin 이름: named argument 대신 위치 인자로 호출해 회피.
+- 각 Vehicle 권한의 App Market 승인 범위.
+
+### 막힌 점
+
+- 이 PC에 Android Emulator/연결 기기가 없어 화면을 실제로 띄워 확인하지 못함. Pleos Connect Emulator(API 34 이미지)에서 시연 확인 필요.

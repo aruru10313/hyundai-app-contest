@@ -6,16 +6,21 @@
         android:name="android.hardware.type.automotive"
         android:required="true" />
 
-    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
-    <uses-permission android:name="android.car.permission.CAR_DRIVING_STATE_3P" />
-
     <!--
-      Pleos 권한은 실제 기능을 붙이는 단계에서 추가한다.
-      - TTS: pleos.car.permission.TTS_SERVICE
-      - STT: pleos.car.permission.STT_SERVICE
-      - Navi: NAVI_ROUTE / NAVI_ROUTE_SEARCH ...
+      Vehicle State 조회 권한 (document.pleos.ai .../Vehicle/vehicle-permission).
       Vehicle SDK 퍼미션은 App Market 사전 승인 범위 내에서만 선언해야 한다.
+      - CAR_DRIVE: Odometer(트립 주행 시간, 주행 가능 거리)
+      - CAR_ENERGY: Fuel / EvBattery(잔량)
+      - CAR_DOORS: Door(잠금 상태)
+      - CAR_LIGHTS: Light(전조등 상태)
     -->
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
+    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
+    <!-- NaviHelper 경로 안내 정보 (공식 navi 샘플 manifest 기준) -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <uses-permission android:name="android.car.permission.CAR_DRIVING_STATE_3P" />
 
     <application
         android:allowBackup="false"

@@ -1,4 +1,4 @@
-package io.github.aruru10313.arrivaltale.data
+package io.github.aruru10313.drivecare.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

@@ -1,4 +1,4 @@
-package io.github.aruru10313.arrivaltale.domain
+package io.github.aruru10313.drivecare.domain
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
