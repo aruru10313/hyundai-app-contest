@@ -83,6 +83,9 @@ jobs:
 
       - name: Upload debug APK
         if: steps.gradle.outputs.ready == 'true'
+        # The private repo's artifact quota can run out; the build and tests above are the real
+        # gate, and the submission APK lives in apk/, so a failed upload must not fail CI.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
