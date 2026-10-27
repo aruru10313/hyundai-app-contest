@@ -38,4 +38,20 @@ class VoiceCommandParserTest {
         assertEquals("실내 온도를 22도로 맞출게요.", VoiceCommandParser.confirmation(VehicleAction.Climate(true, 22f)))
         assertEquals("문을 잠글게요.", VoiceCommandParser.confirmation(VehicleAction.LockDoors(true)))
     }
+
+    @Test
+    fun `rest stop request and yes or no answers`() {
+        assertEquals(VoiceCommand.AddRestStop, parse("휴게소 들를래"))
+        assertEquals(true, VoiceCommandParser.answer("응 추가해 줘"))
+        assertEquals(true, VoiceCommandParser.answer("네"))
+        assertEquals(false, VoiceCommandParser.answer("아니 괜찮아"))
+        assertEquals(null, VoiceCommandParser.answer("에어컨 켜 줘"))
+    }
+
+    @Test
+    fun `object particle follows the last syllable`() {
+        assertEquals("를", objectParticle("대관령휴게소"))
+        assertEquals("을", objectParticle("평창 휴게소 (강릉 방향)"))
+        assertEquals("를", objectParticle("대관령졸음쉼터"))
+    }
 }

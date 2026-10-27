@@ -1,12 +1,20 @@
 package app.drivecare.data
 
 import ai.pleos.playground.navi.constants.NavigationStatus
+import ai.pleos.playground.navi.constants.WaypointIndex
+import ai.pleos.playground.navi.data.CurrentLocationInfo
+import ai.pleos.playground.navi.data.RequestWaypointInfo
+import ai.pleos.playground.navi.data.WaypointInfo
 import ai.pleos.playground.navi.data.DestinationArrivedInfo
 import ai.pleos.playground.navi.data.DestinationInfo
 import ai.pleos.playground.navi.data.DrivingInfo
 import ai.pleos.playground.navi.helper.NaviHelper
 import ai.pleos.playground.navi.helper.listener.NaviHelperEventListener
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import app.drivecare.domain.GeoPoint
+import app.drivecare.domain.RestArea
 import app.drivecare.domain.TripSnapshot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +34,9 @@ interface NavigationStateProvider {
     val isMock: Boolean
 
     fun connect()
+
+    /** Adds a stop before the destination on the head unit's own route guidance. */
+    fun addWaypoint(area: RestArea)
     fun release()
 }
 
@@ -34,6 +45,7 @@ class MockNavigationStateProvider(private val demo: DemoDrive) : NavigationState
     override val isMock = true
 
     override fun connect() = Unit
+    override fun addWaypoint(area: RestArea) = demo.addWaypoint(area)
     override fun release() = Unit
 }
 
@@ -52,6 +64,16 @@ class PleosNavigationStateProvider(context: Context) : NavigationStateProvider {
 
     private var initialized = false
     private var listenerRegistered = false
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** While guidance runs, ask for the car's position every few seconds (for rest-stop search). */
+    private val locationPoll = object : Runnable {
+        override fun run() {
+            if (!mutableState.value.trip.isRouteDriving) return
+            runCatching { helper.getCurrentLocationInfo() }
+            handler.postDelayed(this, 10_000L)
+        }
+    }
 
     private val listener = object : NaviHelperEventListener {
         override fun onNavigationStatus(status: NavigationStatus) {
@@ -64,7 +86,29 @@ class PleosNavigationStateProvider(context: Context) : NavigationStateProvider {
                 }
                 snapshot.copy(status = status.name, trip = trip)
             }
-            if (driving) helper.getDestinationInfo()
+            if (driving) {
+                helper.getDestinationInfo()
+                helper.getWaypointInfo()
+                handler.removeCallbacks(locationPoll)
+                handler.post(locationPoll)
+            }
+        }
+
+        override fun onCurrentLocationInfo(currentLocationInfo: CurrentLocationInfo) {
+            mutableState.update { snapshot ->
+                snapshot.copy(
+                    trip = snapshot.trip.copy(
+                        position = GeoPoint(currentLocationInfo.latitude, currentLocationInfo.longitude),
+                        headingDegrees = currentLocationInfo.heading,
+                    ),
+                )
+            }
+        }
+
+        override fun onWayPointInfo(waypointInfo: List<WaypointInfo>) {
+            mutableState.update { snapshot ->
+                snapshot.copy(trip = snapshot.trip.copy(waypointName = waypointInfo.firstOrNull()?.name))
+            }
         }
 
         override fun onDrivingInfo(drivingInfo: DrivingInfo) {
@@ -87,6 +131,7 @@ class PleosNavigationStateProvider(context: Context) : NavigationStateProvider {
                         etaSeconds = snapshot.trip.etaSeconds ?: destinationInfo.remainTime,
                         remainingRouteMeters = snapshot.trip.remainingRouteMeters ?: destinationInfo.remainDistance,
                         destinationName = destinationInfo.name?.takeIf(String::isNotBlank),
+                        destination = GeoPoint(destinationInfo.latitude, destinationInfo.longitude),
                     ),
                 )
             }
@@ -125,7 +170,31 @@ class PleosNavigationStateProvider(context: Context) : NavigationStateProvider {
         }
     }
 
+    override fun addWaypoint(area: RestArea) {
+        if (!initialized) return
+        try {
+            helper.addWaypoint(
+                RequestWaypointInfo(
+                    latitude = area.point.lat,
+                    longitude = area.point.lon,
+                    poiName = area.name,
+                    waypointIndex = WaypointIndex.FIRST,
+                    poiId = "",
+                    poiSubId = "",
+                    address = "",
+                    poiProvider = "",
+                ),
+            )
+            // Show the stop right away; onWayPointInfo confirms it from the navigation app.
+            mutableState.update { it.copy(trip = it.trip.copy(waypointName = area.name)) }
+            handler.postDelayed({ runCatching { helper.getWaypointInfo() } }, 1_500L)
+        } catch (exception: Exception) {
+            mutableState.update { it.copy(error = exception.message ?: exception.javaClass.simpleName) }
+        }
+    }
+
     override fun release() {
+        handler.removeCallbacksAndMessages(null)
         if (!initialized) return
         try {
             if (listenerRegistered) helper.removeListener(listener)

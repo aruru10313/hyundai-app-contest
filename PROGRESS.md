@@ -693,3 +693,24 @@
 - 에뮬레이터에서 Door 잠금 상태가 "열림"으로 표시됨(`getDoorLockState` true=잠김 가정). Virtual Console로 값 변경해 의미 확인 필요.
 - Odometer 누적거리 0km 표시(에뮬레이터 기본값인지 단위 문제인지 미확인).
 - 실차 헤드유닛 ABI(arm64 가정).
+
+---
+
+## 21. 도어 표시 버그 수정 · 휴게소 경유지 추가
+
+최종 업데이트: 2026-10-27
+
+### 완료
+
+- 도어 잠금: 에뮬레이터는 문별 area(1·4·16·64)를 지원하지 않고 전체 문 area(85)만 지원해 읽기가 모두 실패했고, 화면이 "알 수 없음"을 "열림"으로 표시하던 버그 수정. `Door.checkDoorLockCapabilities`로 지원 area를 받아 해당 area로 조회·제어, 후드·트렁크 area는 제외. 알 수 없으면 "확인 불가", 잠기지 않음은 "잠금 해제"로 표기.
+- **확인됨**: Virtual Console(`adb forward tcp:8088 tcp:8088` → `http://127.0.0.1:8088/`)에서 Door Lock On → `true`(잠김), Unlock → `false`, 앱 화면도 따라 바뀜.
+- Odometer 누적거리 0km는 에뮬레이터 실제 값(`PERF_ODOMETER 0.0`)으로 확인. 버그 아님.
+- 휴게소 경유지 추가: 휴식 경고(RestSoon/Overdue) 시 NaviHelper 현재 위치·진행 방향(`getCurrentLocationInfo`)과 목적지 좌표로 2~40km 앞, 진행 방향 ±35°, 목적지에 더 가까운 휴게소·졸음쉼터를 찾아 음성으로 묻고("응"/"아니" 또는 버튼) `NaviHelper.addWaypoint(RequestWaypointInfo, WaypointIndex.FIRST)`로 추가. 한 번 제안한 곳은 지나칠 때까지 유지, 도착 10분 이내에는 제안하지 않음.
+- 휴게소 데이터: OpenStreetMap(ODbL) 1,011곳 내장(84KB), README에 출처 표기.
+- 음성 인식 오류는 엔진 코드 대신 쉬운 문장으로 4초간 표시, Pleos STT 실패 시 Android 인식기로 한 번 재시도.
+- JVM 테스트 추가(RestStopFinder, Geo, 음성 응답, 조사 처리). 시연 모드로 에뮬레이터에서 제안 → 경유지 추가 흐름 확인.
+
+### UNVERIFIED
+
+- 실제 경로 안내 중 `addWaypoint` 호출 결과(에뮬레이터 내비에서 경로를 띄운 상태로는 아직 미확인, 시연 모드로만 확인).
+- 에뮬레이터 마이크 미설정으로 음성 응답("응") 실사용은 미확인(Extended Controls → Microphone 설정 필요).

@@ -3,6 +3,8 @@ package app.drivecare.domain
 sealed interface VoiceCommand {
     data class RunRoutine(val routine: Routine) : VoiceCommand
     data object Briefing : VoiceCommand
+    /** "휴게소 들를래": add the suggested rest stop as a waypoint. */
+    data object AddRestStop : VoiceCommand
     data class Control(val action: VehicleAction) : VoiceCommand
     data object Unknown : VoiceCommand
 }
@@ -23,6 +25,7 @@ object VoiceCommandParser {
             if (celsius in 16f..30f) return VoiceCommand.Control(VehicleAction.Climate(on = true, targetC = celsius))
         }
         return when {
+            listOf("휴게소", "쉬어", "쉼터").any { it in text } -> VoiceCommand.AddRestStop
             listOf("하차", "내릴", "주차모드").any { it in text } -> VoiceCommand.RunRoutine(Routine.EXIT)
             listOf("출발", "준비").any { it in text } -> VoiceCommand.RunRoutine(Routine.DEPARTURE)
             listOf("브리핑", "상태", "얼마나", "남았").any { it in text } -> VoiceCommand.Briefing
@@ -40,6 +43,18 @@ object VoiceCommandParser {
         }
     }
 
+    /** Reply to a yes/no question: true = yes, false = no, null = not an answer. */
+    fun answer(spoken: String): Boolean? {
+        val text = spoken.replace(" ", "")
+        return when {
+            listOf("아니", "괜찮아", "됐어", "안해", "싫어", "취소").any { it in text } -> false
+            // Short replies only count at the start ("어" is also inside "에어컨").
+            listOf("응", "네", "예", "어", "ㅇㅇ").any { text.startsWith(it) } -> true
+            listOf("좋아", "그래", "추가").any { it in text } -> true
+            else -> null
+        }
+    }
+
     /** Spoken confirmation for a direct control command. */
     fun confirmation(action: VehicleAction): String = when (action) {
         is VehicleAction.LockDoors -> if (action.locked) "문을 잠글게요." else "문 잠금을 해제할게요."
@@ -53,4 +68,10 @@ object VoiceCommandParser {
     }
 
     private fun formatCelsius(c: Float) = if (c % 1f == 0f) c.toInt().toString() else c.toString()
+}
+
+/** 을/를 for a Korean word, decided by the last Hangul syllable (brackets and spaces skipped). */
+fun objectParticle(word: String): String {
+    val last = word.lastOrNull { it in '가'..'힣' } ?: return "를"
+    return if ((last - '가') % 28 != 0) "을" else "를"
 }

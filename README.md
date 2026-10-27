@@ -10,7 +10,7 @@
 |---|---|
 | 타기 전 (주차) | **내 차 홈**: 실사형 3D 차량(드래그로 회전, 세단/SUV·색상 선택)과 문·창문·전조등 상태, 주행 가능 거리, 퀵 컨트롤(문 잠금·공조·전조등·창문), 실내 온도 조절 |
 | 출발 | **원터치 "출발 준비"**: 공조 22℃ · 창문 닫기 · 문 잠금 · 전조등을 한 번에. 이미 된 항목은 건너뜀 |
-| 주행 중 | **휴식 코치**: 연속 운전 2시간 전에 휴게소 안내 (도착이 먼저면 생략)<br>**주행 가능 거리 체크**: 남은 경로 + 안전 여유와 비교해 충분 / 빠듯 / 부족 판단<br>**음성 브리핑·음성 명령**: "얼마나 남았어", "에어컨 켜 줘", "온도 22도" |
+| 주행 중 | **휴식 코치**: 연속 운전 2시간 전에 휴게소 안내 (도착이 먼저면 생략)<br>**휴게소 경유지 추가**: 쉴 때가 되면 진행 방향 앞의 휴게소·졸음쉼터를 찾아 "10km 앞 대관령휴게소를 경유지로 추가할까요?"라고 묻고, "응" 또는 버튼 한 번으로 순정 내비 경로에 추가<br>**주행 가능 거리 체크**: 남은 경로 + 안전 여유와 비교해 충분 / 빠듯 / 부족 판단<br>**음성 브리핑·음성 명령**: "얼마나 남았어", "에어컨 켜 줘", "온도 22도" |
 | 도착 | **하차 모드**: 창문·전조등·공조 정리, 잠기지 않은 문 안내, 주차 위치 기록 |
 
 주행 중 화면은 핵심 문장 1개, 숫자 2개, 버튼 2개(브리핑·음성)만 표시하며 스크롤과 애니메이션이 없습니다. 상세 화면과 차량 제어는 주차 중에만 열립니다. 주행 여부는 `CarUxRestrictions`(Distraction Optimization)로 판단합니다.
@@ -20,7 +20,7 @@
 | SDK | 버전 | 사용 기능 |
 |---|---|---|
 | Vehicle | 2.3.2 | Odometer(트립 운전 시간·주행 가능 거리·누적거리), Fuel / EvBattery(잔량), Door(잠금 조회·제어), Light(전조등 조회·제어), HVAC(전원·온도), Window(위치·닫기) |
-| NaviHelper | 3.0.5 | 경로 안내 상태, 남은 시간·거리, 목적지 이름, 도착 이벤트 |
+| NaviHelper | 3.0.5 | 경로 안내 상태, 남은 시간·거리, 목적지 이름·좌표, 현재 위치·진행 방향, 도착 이벤트, 경유지 추가(addWaypoint) |
 | TextToSpeech | 3.3.1 | 브리핑·경고·루틴 결과 음성 안내 (ON_DEVICE) |
 | SpeechToText | 3.3.1 | 음성 명령 (ON_DEVICE) |
 | FusedLocation | 1.1.3 | 주차 위치 기록 |
@@ -82,7 +82,7 @@ MainActivity.kt          탭(내 차 / 드라이브 케어), 주행 화면, 음�
 ui/                      VehicleHome(차량 홈), CarModelView(glTF 3D 차량), Car3D(대체용 Canvas 차량), Theme(Pleos 디자인 토큰)
 assets/models/           SUV·세단 × 화이트/그레이/블루 GLB
 tools/export_car.py      3D 모델 분리·재색상화 스크립트
-domain/                  DriveCare(휴식·주행 가능 거리·경고), CarRoutines(출발/하차 루틴), VoiceCommand — 순수 Kotlin + JVM 테스트
+domain/                  DriveCare(휴식·주행 가능 거리·경고), RestStop(진행 방향 앞 휴게소 찾기), CarRoutines(출발/하차 루틴), VoiceCommand — 순수 Kotlin + JVM 테스트
 data/                    Vehicle / Navigation / UxRestriction / TTS / VoiceInput / ParkingLocation Provider
                          (Pleos·AAOS 구현 + 폴백, DemoDrive 시연 데이터)
 ```
@@ -98,6 +98,11 @@ data/                    Vehicle / Navigation / UxRestriction / TTS / VoiceInput
 
 | SceneView 2.3.0 (Filament 기반 glTF 렌더러) | Apache License 2.0 |
 | 3D 차량 모델 "Generic passenger car pack" | CC BY 4.0 (아래 출처 표기) |
+| 휴게소·졸음쉼터 위치 데이터 (`assets/rest_areas.json`) | © OpenStreetMap contributors, ODbL 1.0 |
+
+### 휴게소 위치 데이터 출처 (ODbL)
+
+휴게소·졸음쉼터 위치는 © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors 데이터(Open Database License 1.0)를 사용합니다. 2026-10-27 Overpass API로 대한민국 내 `highway=services`, `highway=rest_area` 중 이름에 "휴게소"·"쉼터"가 들어간 1,011곳(휴게소 768, 졸음쉼터 243)을 추출해 이름과 좌표만 앱에 넣었습니다.
 
 ### 3D 차량 모델 출처 (CC BY 4.0)
 

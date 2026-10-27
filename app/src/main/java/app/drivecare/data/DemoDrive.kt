@@ -3,6 +3,9 @@ package app.drivecare.data
 import app.drivecare.domain.CarSnapshot
 import app.drivecare.domain.DoorPosition
 import app.drivecare.domain.EnergyType
+import app.drivecare.domain.Geo
+import app.drivecare.domain.GeoPoint
+import app.drivecare.domain.RestArea
 import app.drivecare.domain.TripSnapshot
 import app.drivecare.domain.VehicleAction
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +30,10 @@ class DemoDrive(
 ) {
     private val routeMeters = 52_000
     private val tripSeconds = 40 * 60
+    // Yeongdong Expressway near Pyeongchang, heading for Gangneung Station (real coordinates).
+    private val startPoint = GeoPoint(37.55, 128.30)
+    private val destinationPoint = GeoPoint(37.7637, 128.8996)
+    private val heading = Geo.bearingDegrees(startPoint, destinationPoint)
     private val mutableVehicle = MutableStateFlow(VehicleSnapshot(source = "시연 데이터", car = parkedCar()))
     private val mutableNavigation = MutableStateFlow(
         NavigationSnapshot(status = "INACTIVE", trip = TripSnapshot()),
@@ -50,7 +57,18 @@ class DemoDrive(
                 ),
             )
         }
-        setTrip(TripSnapshot(tripSeconds, routeMeters, "강릉역", isRouteDriving = true), "ROUTE_DRIVE")
+        setTrip(
+            TripSnapshot(
+                tripSeconds,
+                routeMeters,
+                "강릉역",
+                isRouteDriving = true,
+                position = startPoint,
+                headingDegrees = heading,
+                destination = destinationPoint,
+            ),
+            "ROUTE_DRIVE",
+        )
         onDrivingChanged(true)
         job = scope.launch {
             while (isActive) {
@@ -66,6 +84,11 @@ class DemoDrive(
         mutableVehicle.update { it.copy(car = parkedCar()) }
         setTrip(TripSnapshot(), "INACTIVE")
         onDrivingChanged(false)
+    }
+
+    /** Stand-in for NaviHelper.addWaypoint: the route now stops at the rest area. */
+    fun addWaypoint(area: RestArea) {
+        mutableNavigation.update { it.copy(trip = it.trip.copy(waypointName = area.name)) }
     }
 
     /** Stand-in for the driver locking up after the arrival reminder. */
@@ -115,7 +138,12 @@ class DemoDrive(
             )
         }
         if (eta > 0) {
-            setTrip(trip.copy(etaSeconds = eta, remainingRouteMeters = route), "ROUTE_DRIVE")
+            val progress = 1.0 - route.toDouble() / routeMeters
+            val position = GeoPoint(
+                startPoint.lat + (destinationPoint.lat - startPoint.lat) * progress,
+                startPoint.lon + (destinationPoint.lon - startPoint.lon) * progress,
+            )
+            setTrip(trip.copy(etaSeconds = eta, remainingRouteMeters = route, position = position), "ROUTE_DRIVE")
             return false
         }
         setTrip(trip.copy(etaSeconds = 0, remainingRouteMeters = 0, isRouteDriving = false, arrived = true), "INACTIVE")

@@ -7,6 +7,12 @@ data class TripSnapshot(
     val destinationName: String? = null,
     val isRouteDriving: Boolean = false,
     val arrived: Boolean = false,
+    val position: GeoPoint? = null,
+    /** Direction of travel, degrees clockwise from north. */
+    val headingDegrees: Double? = null,
+    val destination: GeoPoint? = null,
+    /** A stop the driver added on the way (e.g. a rest area), if any. */
+    val waypointName: String? = null,
 )
 
 enum class EnergyType { FUEL, EV }

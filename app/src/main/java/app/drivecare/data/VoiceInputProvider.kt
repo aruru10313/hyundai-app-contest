@@ -46,6 +46,7 @@ class PleosVoiceInputProvider(context: Context) : VoiceInputProvider {
     private var pleosFailed = false
     private var onFinal: ((String) -> Unit)? = null
     private var androidRecognizer: SpeechRecognizer? = null
+    private var triedAndroidFallback = false
 
     private val results = object : ResultListener {
         override fun onReady() = Unit
@@ -64,7 +65,14 @@ class PleosVoiceInputProvider(context: Context) : VoiceInputProvider {
         }
 
         override fun onError(errorType: ErrorType) {
-            mutableState.value = VoiceInputState(error = "음성 인식 오류 ($errorType)")
+            // The Pleos engine can be unavailable (e.g. emulator without a microphone set up);
+            // try Android's recognizer once before telling the driver.
+            if (onFinal != null && !triedAndroidFallback) {
+                triedAndroidFallback = true
+                listenWithAndroid()
+            } else {
+                mutableState.value = VoiceInputState(error = UNAVAILABLE)
+            }
         }
 
         override fun onUpdatedRms(rms: Double) = Unit
@@ -92,6 +100,7 @@ class PleosVoiceInputProvider(context: Context) : VoiceInputProvider {
 
     override fun listen(onFinal: (String) -> Unit) {
         this.onFinal = onFinal
+        triedAndroidFallback = false
         mutableState.value = VoiceInputState(listening = true)
         val speech = stt
         if (pleosReady && speech != null) {
@@ -107,7 +116,7 @@ class PleosVoiceInputProvider(context: Context) : VoiceInputProvider {
 
     private fun listenWithAndroid() {
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
-            mutableState.value = VoiceInputState(error = "이 기기에서는 음성 인식을 쓸 수 없어요")
+            mutableState.value = VoiceInputState(error = UNAVAILABLE)
             return
         }
         val recognizer = androidRecognizer ?: SpeechRecognizer.createSpeechRecognizer(appContext).also {
@@ -127,7 +136,7 @@ class PleosVoiceInputProvider(context: Context) : VoiceInputProvider {
                     error = if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                         "잘 듣지 못했어요. 다시 말씀해 주세요"
                     } else {
-                        "음성 인식 오류 ($error)"
+                        UNAVAILABLE
                     },
                 )
             }
@@ -180,3 +189,5 @@ class PleosVoiceInputProvider(context: Context) : VoiceInputProvider {
         androidRecognizer = null
     }
 }
+
+private const val UNAVAILABLE = "지금은 음성 인식을 쓸 수 없어요. 화면 버튼을 눌러 주세요"

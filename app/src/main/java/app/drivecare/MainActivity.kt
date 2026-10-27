@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddLocationAlt
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.HealthAndSafety
 import androidx.compose.material.icons.outlined.Mic
@@ -61,7 +62,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import app.drivecare.data.AndroidCarUxRestrictionProvider
 import app.drivecare.data.AndroidTtsProvider
+import androidx.compose.ui.platform.LocalContext
 import app.drivecare.data.DemoDrive
+import app.drivecare.data.RestAreaRepository
+import app.drivecare.domain.Geo
+import app.drivecare.domain.RestArea
+import app.drivecare.domain.RestStopFinder
+import app.drivecare.domain.RestStopSuggestion
+import app.drivecare.domain.objectParticle
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import app.drivecare.data.DemoParkingLocationProvider
 import app.drivecare.data.FallbackTtsProvider
 import app.drivecare.data.ParkingLocationProvider
@@ -272,7 +282,7 @@ private fun DriveCareScreen(
     var paintIndex by rememberSaveable { mutableIntStateOf(0) }
     var routineMessage by remember { mutableStateOf<String?>(null) }
 
-    fun say(text: String) {
+    fun say(text: String): Job =
         scope.launch {
             speechLock.withLock {
                 try {
@@ -284,6 +294,41 @@ private fun DriveCareScreen(
                 }
             }
         }
+
+    // Rest stop on the way: when a break is due, find the next 휴게소 ahead and offer it as a waypoint.
+    val context = LocalContext.current
+    val restFinder = remember { RestStopFinder(RestAreaRepository.load(context)) }
+    var declinedStop by remember { mutableStateOf<String?>(null) }
+    var awaitingAnswer by remember { mutableStateOf<RestStopSuggestion?>(null) }
+    val needsRest = report.rest is RestAdvice.RestSoon || report.rest is RestAdvice.Overdue
+    val position = trip.position
+    val heading = trip.headingDegrees
+    // Close to the destination a detour makes less sense than resting on arrival.
+    val arrivingSoon = (trip.etaSeconds ?: Int.MAX_VALUE) < 10 * 60
+    // Once a place is offered it stays the offer until the car passes it, so the suggestion (and the
+    // spoken question) doesn't hop between nearby stops as the car moves.
+    var offeredStop by remember { mutableStateOf<RestArea?>(null) }
+    val restOffer = if (!isParked && trip.isRouteDriving && trip.waypointName == null && needsRest && !arrivingSoon &&
+        position != null && heading != null
+    ) {
+        val kept = offeredStop?.takeIf { area ->
+            Geo.distanceMeters(position, area.point) > 500 &&
+                Geo.angleBetween(Geo.bearingDegrees(position, area.point), heading) < 90
+        }
+        val offer = kept?.let { RestStopSuggestion(it, Geo.distanceMeters(position, it.point).toInt()) }
+            ?: remember(position, heading, trip.destination) {
+                restFinder.nextAhead(position, heading, trip.destination, trip.destinationName)
+            }
+        offer?.takeIf { it.area.name != declinedStop }
+    } else {
+        null
+    }
+    LaunchedEffect(restOffer?.area) { if (restOffer != null) offeredStop = restOffer.area }
+
+    fun addRestStop(stop: RestStopSuggestion) {
+        navigationStateProvider.addWaypoint(stop.area)
+        awaitingAnswer = null
+        say("${stop.area.name}${objectParticle(stop.area.name)} 경유지로 추가했어요.")
     }
 
     // A briefing when route guidance starts, then each new or escalated alert exactly once.
@@ -308,7 +353,20 @@ private fun DriveCareScreen(
     }
 
     fun handleVoice(spoken: String) {
+        awaitingAnswer?.let { pending ->
+            when (VoiceCommandParser.answer(spoken)) {
+                true -> return addRestStop(pending)
+                false -> {
+                    declinedStop = pending.area.name
+                    awaitingAnswer = null
+                    say("알겠어요. 다음 휴게소에서 다시 알려 드릴게요.")
+                    return
+                }
+                null -> Unit
+            }
+        }
         when (val command = VoiceCommandParser.parse(spoken)) {
+            VoiceCommand.AddRestStop -> restOffer?.let(::addRestStop) ?: say("가까운 휴게소를 찾지 못했어요.")
             is VoiceCommand.RunRoutine -> runRoutine()
             VoiceCommand.Briefing -> say(briefing(trip, car, report))
             is VoiceCommand.Control -> {
@@ -326,6 +384,16 @@ private fun DriveCareScreen(
 
     fun startVoice() {
         ttsProvider.stop()
+        requestMic { voiceInputProvider.listen(::handleVoice) }
+    }
+
+    // Ask once per place, then listen for "응" / "아니" without the driver touching the screen.
+    val askedStops = remember { mutableSetOf<String>() }
+    LaunchedEffect(restOffer?.area?.name) {
+        val stop = restOffer ?: return@LaunchedEffect
+        if (!askedStops.add(stop.area.name)) return@LaunchedEffect
+        awaitingAnswer = stop
+        say("${stop.spokenPlace}${objectParticle(stop.area.name)} 경유지로 추가할까요? 추가하려면 응이라고 말씀하세요.").join()
         requestMic { voiceInputProvider.listen(::handleVoice) }
     }
     LaunchedEffect(report.alerts) {
@@ -394,6 +462,8 @@ private fun DriveCareScreen(
                 isLandscape = isLandscape,
                 onBriefing = { say(briefing(trip, car, report)) },
                 onVoice = ::startVoice,
+                restOffer = restOffer,
+                onAddRestStop = { restOffer?.let(::addRestStop) },
             )
         }
         VoiceOverlay(voiceState, onCancel = voiceInputProvider::cancel, modifier = Modifier.align(Alignment.BottomCenter))
@@ -402,6 +472,13 @@ private fun DriveCareScreen(
 
 @Composable
 private fun VoiceOverlay(state: VoiceInputState, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+    // Errors and final transcripts are informational; clear them after a moment.
+    LaunchedEffect(state) {
+        if (!state.listening && state.error != null) {
+            delay(4_000)
+            onCancel()
+        }
+    }
     val text = when {
         state.listening -> state.transcript ?: "듣고 있어요"
         state.error != null -> state.error
@@ -489,6 +566,8 @@ private fun DrivingView(
     isLandscape: Boolean,
     onBriefing: () -> Unit,
     onVoice: () -> Unit,
+    restOffer: RestStopSuggestion?,
+    onAddRestStop: () -> Unit,
 ) {
     val headline = report.headline
     val accent = headline?.severity?.color() ?: Good
@@ -502,6 +581,7 @@ private fun DrivingView(
             trip.destinationName,
             "${formatDuration(eta)} 남음",
             trip.remainingRouteMeters?.let(::formatKm),
+            trip.waypointName?.let { "경유 $it" },
         ).joinToString("  ·  ")
     } ?: "경로 안내를 기다리는 중"
 
@@ -527,6 +607,17 @@ private fun DrivingView(
             )
             Spacer(Modifier.height(14.dp))
             Text(tripLine, color = TextMain, fontSize = ts(22), lineHeight = ts(30), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            restOffer?.let {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "휴게소 제안  ·  ${it.spokenPlace}",
+                    color = Good,
+                    fontSize = ts(20),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
     val facts: @Composable (Modifier) -> Unit = { modifier ->
@@ -542,7 +633,20 @@ private fun DrivingView(
     }
     val button: @Composable (Modifier) -> Unit = { modifier ->
         Row(modifier, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            BriefingButton(onBriefing, Modifier.weight(1f).fillMaxHeight())
+            if (restOffer != null) {
+                Button(
+                    onClick = onAddRestStop,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Good, contentColor = Background),
+                ) {
+                    Icon(Icons.Outlined.AddLocationAlt, contentDescription = null, modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text("경유지 추가", fontSize = ts(22), fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                }
+            } else {
+                BriefingButton(onBriefing, Modifier.weight(1f).fillMaxHeight())
+            }
             Button(
                 onClick = onVoice,
                 modifier = Modifier.fillMaxHeight().width(120.dp),
