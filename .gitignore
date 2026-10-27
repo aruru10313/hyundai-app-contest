@@ -33,3 +33,6 @@ Thumbs.db
 # Logs
 *.log
 .shots/
+
+# Contest forms (filled copies hold personal info) — keep out of git
+docs/submission/

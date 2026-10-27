@@ -359,7 +359,7 @@
 
 ## 9. 기존 기록 (Step 1)
 
-- 저장소(`aruru10313/hyundai-app-contest`) 클론, 문서 골격 생성: `README.md`, `PROGRESS.md`, `.gitignore`.
+- 저장소 클론, 문서 골격 생성: `README.md`, `PROGRESS.md`, `.gitignore`.
 - CI 골격 생성: `.github/workflows/android.yml`
   - `repo-check`: 필수 문서 존재 확인.
   - `android-build`: JDK 17 + Android SDK + Gradle로 `testDebugUnitTest` → `assembleDebug` → APK 업로드.
@@ -378,8 +378,8 @@
   - `C:\Android\Sdk`에 `platforms;android-35`, `build-tools;34.0.0`/`35.0.0`,
     `platform-tools 37.0.1`, `cmdline-tools latest` 존재.
   - 에뮬레이터/시스템 이미지 없음.
-  - JDK 17은 `C:\Users\hayul\jdks\jdk17` (API 확인용 `javap`에만 사용).
-- Git: `main`, 원격 `aruru10313/hyundai-app-contest`, 최신 커밋 `79ecc21`, 작업 트리 clean.
+  - JDK 17은 로컬에 별도 설치 (API 확인용 `javap`에만 사용).
+- Git: `main`, 원격 GitHub 저장소, 최신 커밋 `79ecc21`, 작업 트리 clean.
 
 ---
 
@@ -573,7 +573,7 @@
 
 ### 완료
 
-- "도착시간 맞춤 AI 동화" 기능을 제거하고(`StoryPlanner`, `StoryGenerator`, `stories.json`, 동화 장면 UI), 패키지를 `io.github.aruru10313.drivecare`로 변경.
+- "도착시간 맞춤 AI 동화" 기능을 제거하고(`StoryPlanner`, `StoryGenerator`, `stories.json`, 동화 장면 UI), 패키지를 `app.drivecare`로 변경.
 - 순수 Kotlin 도메인 `domain/DriveCare.kt`:
   - `RestCoach`: 연속 운전 2시간 기준 휴식 안내(15분 전부터 경고), ETA가 먼저면 안내 생략.
   - `RangeCheck`: 주행 가능 거리 vs 남은 경로 + 여유(max 30km, 경로 15%) → 충분/빠듯/부족.
