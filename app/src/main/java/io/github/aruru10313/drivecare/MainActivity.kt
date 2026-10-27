@@ -113,6 +113,8 @@ import io.github.aruru10313.drivecare.ui.PleosType
 import io.github.aruru10313.drivecare.ui.Panel
 import io.github.aruru10313.drivecare.ui.PanelRaised
 import io.github.aruru10313.drivecare.ui.TextMain
+import io.github.aruru10313.drivecare.ui.SwitchOnContent
+import io.github.aruru10313.drivecare.ui.SwitchOn
 import io.github.aruru10313.drivecare.ui.VehicleHome
 import io.github.aruru10313.drivecare.ui.color
 import kotlinx.coroutines.CancellationException
@@ -427,37 +429,53 @@ private fun VoiceOverlay(state: VoiceInputState, onCancel: () -> Unit, modifier:
 
 @Composable
 private fun NavRail(selected: Int, alertCount: Int, vertical: Boolean, onSelect: (Int) -> Unit) {
-    val items = listOf(Icons.Outlined.DirectionsCar to "내 차", Icons.Outlined.HealthAndSafety to "드라이브 케어")
+    val items = listOf(Icons.Outlined.DirectionsCar to "내 차", Icons.Outlined.HealthAndSafety to "케어")
+    // Pleos-style tab: a large touch tile, filled when selected, with a red count badge for alerts.
     val item: @Composable (Int, Modifier) -> Unit = { index, m ->
         val (icon, label) = items[index]
         val active = index == selected
-        Column(
+        val content = if (active) SwitchOnContent else Muted
+        Box(
             m
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color.Transparent)
+                .clip(RoundedCornerShape(20.dp))
+                .background(if (active) SwitchOn else Color.Transparent)
                 .clickable { onSelect(index) }
-                .padding(vertical = 10.dp, horizontal = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(vertical = 16.dp, horizontal = 8.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = if (active) TextMain else Muted, modifier = Modifier.size(24.dp))
-            Text(
-                if (index == 1 && alertCount > 0) "$label · $alertCount" else label,
-                color = if (active) TextMain else Muted,
-                fontSize = ts(13),
-                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                maxLines = 1,
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(icon, contentDescription = label, tint = content, modifier = Modifier.size(40.dp))
+                Spacer(Modifier.size(6.dp))
+                Text(label, color = content, style = PleosType.labelMedium, maxLines = 1)
+            }
+            if (index == 1 && alertCount > 0) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Danger),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("$alertCount", color = Color.White, style = PleosType.labelSmall)
+                }
+            }
         }
     }
     if (vertical) {
         Column(
-            Modifier.fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(Panel).padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-        ) { items.indices.forEach { item(it, Modifier) } }
+            Modifier
+                .width(132.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Panel)
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) { items.indices.forEach { item(it, Modifier.fillMaxWidth()) } }
     } else {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Panel).padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Panel).padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) { items.indices.forEach { item(it, Modifier.weight(1f)) } }
     }
 }
