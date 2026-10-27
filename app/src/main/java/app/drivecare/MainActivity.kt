@@ -799,7 +799,7 @@ private fun RangeCard(
 private fun ExitCheckCard(doorLocked: Map<DoorPosition, Boolean>, headlightsOn: Boolean?, modifier: Modifier) {
     DashCard("하차 체크", modifier) {
         DoorPosition.entries.forEach { door ->
-            CheckLine(door.label + " 문", doorLocked[door]?.let { if (it) "잠김" else "열림" }, doorLocked[door])
+            CheckLine(door.label + " 문", doorLocked[door]?.let { if (it) "잠김" else "잠금 해제" }, doorLocked[door])
         }
         CheckLine("전조등", headlightsOn?.let { if (it) "켜짐" else "꺼짐" }, headlightsOn?.not())
     }

@@ -71,6 +71,11 @@ class PleosVehicleStateProvider(
     override val state: StateFlow<VehicleSnapshot> = mutableState.asStateFlow()
 
     private var initialized = false
+    /**
+     * Door areas this car reports lock state for. Cars differ: the Pleos emulator exposes one area
+     * covering all doors rather than one per door, so per-door reads fail there.
+     */
+    @Volatile private var lockAreas: List<DoorArea>? = null
     private val windowPositions = java.util.concurrent.ConcurrentHashMap<WindowValue, Int>()
     private val poll = object : Runnable {
         override fun run() {
@@ -129,18 +134,17 @@ class PleosVehicleStateProvider(
         )
 
         val door = vehicle.getDoor()
-        doorAreas.forEach { (position, value) ->
-            // UNVERIFIED: assumed true = locked, from the API name getDoorLockState.
-            door.getDoorLockState(
-                DoorArea(value),
-                { locked ->
-                    updateCar("Door") {
-                        if (locked == null) copy(doorLocked = doorLocked - position)
-                        else copy(doorLocked = doorLocked + (position to locked))
-                    }
+        val areas = lockAreas
+        if (areas == null) {
+            door.checkDoorLockCapabilities(
+                { supported: List<DoorArea> ->
+                    lockAreas = supported.filter { it.positions().isNotEmpty() }.ifEmpty { perDoorAreas }
+                    readDoorLocks()
                 },
-                { markUnavailable("Door") },
+                { lockAreas = perDoorAreas; readDoorLocks() },
             )
+        } else {
+            readDoorLocks()
         }
 
         vehicle.getLight().getCurrentLowBeamLightState(
@@ -183,6 +187,26 @@ class PleosVehicleStateProvider(
         }
     }
 
+    private fun readDoorLocks() {
+        val door = vehicle.getDoor()
+        (lockAreas ?: perDoorAreas).forEach { area ->
+            val positions = area.positions()
+            if (positions.isEmpty()) return@forEach
+            // true = locked: verified on the Pleos emulator, where Virtual Console "Door Lock: On"
+            // reads back as true.
+            door.getDoorLockState(
+                area,
+                { locked ->
+                    updateCar("Door") {
+                        if (locked == null) copy(doorLocked = doorLocked - positions.toSet())
+                        else copy(doorLocked = doorLocked + positions.associateWith { locked })
+                    }
+                },
+                { markUnavailable("Door") },
+            )
+        }
+    }
+
     override fun perform(action: VehicleAction) {
         if (!initialized) {
             reportControl("차량에 연결되지 않았어요")
@@ -193,8 +217,8 @@ class PleosVehicleStateProvider(
         }
         try {
             when (action) {
-                is VehicleAction.LockDoors -> doorAreas.forEach { (_, value) ->
-                    vehicle.getDoor().setDoorLock(DoorArea(value), action.locked, { _, _ -> refreshSoon() }, onFailed)
+                is VehicleAction.LockDoors -> (lockAreas ?: perDoorAreas).forEach { area ->
+                    vehicle.getDoor().setDoorLock(area, action.locked, { _, _ -> refreshSoon() }, onFailed)
                 }
                 is VehicleAction.Headlights -> vehicle.getLight().setLowBeamLightSwitch(
                     if (action.on) LightSwitch.ON else LightSwitch.OFF,
@@ -256,12 +280,16 @@ class PleosVehicleStateProvider(
         message?.takeIf(String::isNotBlank) ?: javaClass.simpleName
 
     private companion object {
-        val doorAreas = listOf(
-            DoorPosition.FRONT_LEFT to DoorValue.ROW_1_LEFT,
-            DoorPosition.FRONT_RIGHT to DoorValue.ROW_1_RIGHT,
-            DoorPosition.REAR_LEFT to DoorValue.ROW_2_LEFT,
-            DoorPosition.REAR_RIGHT to DoorValue.ROW_2_RIGHT,
+        val doorPositions = mapOf(
+            DoorValue.ROW_1_LEFT to DoorPosition.FRONT_LEFT,
+            DoorValue.ROW_1_RIGHT to DoorPosition.FRONT_RIGHT,
+            DoorValue.ROW_2_LEFT to DoorPosition.REAR_LEFT,
+            DoorValue.ROW_2_RIGHT to DoorPosition.REAR_RIGHT,
         )
+        val perDoorAreas = doorPositions.keys.map { DoorArea(it) }
+
+        /** Passenger doors an area covers (empty for hood or tailgate areas). */
+        fun DoorArea.positions(): List<DoorPosition> = values.mapNotNull { doorPositions[it] }
         val sideWindows = listOf(
             WindowValue.ROW_1_LEFT,
             WindowValue.ROW_1_RIGHT,

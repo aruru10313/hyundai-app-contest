@@ -185,7 +185,9 @@ private fun CarStage(
 private fun StatusBadges(car: CarSnapshot) {
     val unlocked = DoorPosition.entries.filter { car.doorLocked[it] == false }
     val badges = buildList {
-        if (unlocked.isNotEmpty()) add(unlocked.joinToString(", ") { it.label } + " 문 열림" to Danger)
+        // This is the lock state, not door position, so say "잠금 해제" rather than "열림".
+        if (unlocked.size == DoorPosition.entries.size) add("모든 문 잠금 해제" to Danger)
+        else if (unlocked.isNotEmpty()) add(unlocked.joinToString(", ") { it.label } + " 문 잠금 해제" to Danger)
         if (car.windowsOpen == true) add("창문 열림" to Caution)
         if (car.headlightsOn == true) add("전조등 켜짐" to Muted)
     }
@@ -256,7 +258,11 @@ private fun SwitchGrid(car: CarSnapshot, onAction: (VehicleAction) -> Unit) {
             SwitchTile(
                 icon = if (allLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
                 title = "도어",
-                state = if (allLocked) "잠김" else "열림",
+                state = when {
+                    car.doorLocked.isEmpty() -> "확인 불가"
+                    allLocked -> "잠김"
+                    else -> "잠금 해제"
+                },
                 on = allLocked,
                 warn = !allLocked && car.doorLocked.isNotEmpty(),
                 modifier = Modifier.weight(1f),
