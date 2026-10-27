@@ -88,3 +88,5 @@ jobs:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          # Private repos have a small artifact quota; keep each APK only for a week.
+          retention-days: 7
