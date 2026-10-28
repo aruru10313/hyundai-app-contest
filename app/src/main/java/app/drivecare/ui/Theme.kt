@@ -1,6 +1,10 @@
 package app.drivecare.ui
 
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -110,6 +114,14 @@ internal object PleosType {
     val labelMedium get() = style(24, 28, FontWeight.Normal)
     val labelSmall get() = style(20, 24, FontWeight.Normal)
 }
+
+/** Pleos shadow Level 1 (X0 Y6 Blur24, #000000 8%), for floating elements such as overlays and chips. */
+internal fun Modifier.pleosShadowLevel1(shape: Shape): Modifier = shadow(
+    elevation = 6.dp,
+    shape = shape,
+    ambientColor = Color.Black.copy(alpha = 0.08f),
+    spotColor = Color.Black.copy(alpha = 0.08f),
+)
 
 /** Body paint choices for the 3D model (generic names, no manufacturer color names). */
 internal val PaintOptions = listOf(

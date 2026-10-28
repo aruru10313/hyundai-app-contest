@@ -6,6 +6,7 @@ import ai.pleos.playground.tts.constant.Mode
 import ai.pleos.playground.tts.listener.EventListener
 import ai.pleos.playground.tts.listener.OnInitializeListener
 import android.content.Context
+import android.media.AudioAttributes
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -18,7 +19,7 @@ import kotlin.coroutines.resumeWithException
  * Pleos TextToSpeech in ON_DEVICE mode, which the docs say works offline and needs no app
  * registration. Call order follows the docs: initialize → addEventListener → setLocale → speak.
  */
-class PleosTtsProvider(context: Context) : TtsProvider {
+class PleosTtsProvider(context: Context, private val audioAttributes: AudioAttributes) : TtsProvider {
     private val tts = TextToSpeech(context.applicationContext, Mode.ON_DEVICE)
     private val ready = CompletableDeferred<Boolean>()
     @Volatile private var pending: CancellableContinuation<Unit>? = null
@@ -38,6 +39,7 @@ class PleosTtsProvider(context: Context) : TtsProvider {
                 override fun onSuccess() {
                     tts.addEventListener(events)
                     tts.setLocale(Locale.KOREAN)
+                    tts.setAudioAttributes(audioAttributes)
                     ready.complete(true)
                 }
 
@@ -89,8 +91,11 @@ class PleosTtsProvider(context: Context) : TtsProvider {
 class FallbackTtsProvider(
     private val primary: PleosTtsProvider?,
     private val fallback: AndroidTtsProvider,
+    private val audio: GuidanceAudio,
 ) : TtsProvider {
-    override suspend fun speak(text: String) {
+    override suspend fun speak(text: String) = audio.withFocus { speakWithoutFocus(text) }
+
+    private suspend fun speakWithoutFocus(text: String) {
         if (primary != null && primary.isAvailable()) {
             try {
                 primary.speak(text)

@@ -1,6 +1,7 @@
 package app.drivecare.data
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import kotlinx.coroutines.CompletableDeferred
@@ -12,7 +13,7 @@ import kotlinx.coroutines.CancellableContinuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class AndroidTtsProvider(context: Context) : TtsProvider {
+class AndroidTtsProvider(context: Context, audioAttributes: AudioAttributes? = null) : TtsProvider {
     private val engineReady = CompletableDeferred<Int>()
     private val pending = ConcurrentHashMap<String, CancellableContinuation<Unit>>()
     private val engine = TextToSpeech(context.applicationContext) { status ->
@@ -20,6 +21,7 @@ class AndroidTtsProvider(context: Context) : TtsProvider {
     }
 
     init {
+        audioAttributes?.let(engine::setAudioAttributes)
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String) = Unit
 

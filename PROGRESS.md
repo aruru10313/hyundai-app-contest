@@ -714,3 +714,27 @@
 
 - 실제 경로 안내 중 `addWaypoint` 호출 결과(에뮬레이터 내비에서 경로를 띄운 상태로는 아직 미확인, 시연 모드로만 확인).
 - 에뮬레이터 마이크 미설정으로 음성 응답("응") 실사용은 미확인(Extended Controls → Microphone 설정 필요).
+
+---
+
+## 22. Pleos 디자인 가이드 추가 적용 (앱 아이콘 · 오디오 포커스 · 아이콘 크기 · 그림자)
+
+최종 업데이트: 2026-10-28
+
+### 확인된 사실 (document.pleos.ai 디자인 가이드)
+
+- App Icon: Android Adaptive Icon 형식, Foreground/Background 레이어 분리, 그리드 시스템 사용. 차량 브랜드별 마스킹(현대: 둥근 사각형)은 시스템이 적용.
+- Iconography: 기본 48×48dp 그리드, Filled/Outlined 2가지 타입.
+- Shadow: Level 1 (X0 Y6 Blur24 #000000 8%), Level 2, Level 3 정의.
+- Basic button 상태: Pressed / Disabled / Loading.
+- 주행 안전 가이드: 주행 중 중요한 오디오 안내는 오디오 포커스 정책에 맞춰 재생, 큰 터치 영역·높은 대비·텍스트 최소화, 음성·프리셋 우선.
+
+### 완료
+
+- Adaptive 앱 아이콘(배경·전경·모노크롬 레이어, 안전 영역 안에 차량 + 체크 링). 에뮬레이터 하단 독에서 현대 브랜드 마스크가 적용된 것 확인. 기본 안드로이드 아이콘 제거.
+- 음성 안내 오디오 포커스: `USAGE_ASSISTANCE_NAVIGATION_GUIDANCE` 속성으로 재생하고 말하는 동안 `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK` 요청(음악 볼륨 낮춤), 끝나면 반환. Pleos TTS에도 `setAudioAttributes` 적용.
+- 내비게이션 탭 아이콘 48dp, 떠 있는 요소(음성 안내 배너, 차종·색상 칩)에 Shadow Level 1.
+
+### 남은 일
+
+- App Market 등록용 512×512 아이콘 PNG, 스크린샷 3종, IARC 연령 등급(1차 서류에는 불필요).

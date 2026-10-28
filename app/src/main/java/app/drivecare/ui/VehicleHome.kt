@@ -445,6 +445,7 @@ internal fun RoundIconButton(icon: ImageVector, description: String, size: Dp = 
 private fun IconChip(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
         Modifier
+            .pleosShadowLevel1(RoundedCornerShape(50))
             .clip(RoundedCornerShape(50))
             .background(PanelRaised.copy(alpha = .9f))
             .clickable(onClick = onClick)

@@ -74,6 +74,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import app.drivecare.data.DemoParkingLocationProvider
 import app.drivecare.data.FallbackTtsProvider
+import app.drivecare.data.GuidanceAudio
 import app.drivecare.data.ParkingLocationProvider
 import app.drivecare.data.PleosParkingLocationProvider
 import app.drivecare.data.PleosTtsProvider
@@ -120,6 +121,7 @@ import app.drivecare.ui.Muted
 import app.drivecare.ui.PaintOptions
 import app.drivecare.ui.Pleos
 import app.drivecare.ui.PleosType
+import app.drivecare.ui.pleosShadowLevel1
 import app.drivecare.ui.Panel
 import app.drivecare.ui.PanelRaised
 import app.drivecare.ui.TextMain
@@ -170,9 +172,11 @@ class MainActivity : ComponentActivity() {
         isAutomotive = packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)
         val useDemo = !isAutomotive || ProviderConfig.forceDemoDrive
         // Pleos voice services only exist on a Pleos head unit; elsewhere use Android's own.
+        val guidanceAudio = GuidanceAudio(applicationContext)
         ttsProvider = FallbackTtsProvider(
-            primary = if (isAutomotive) PleosTtsProvider(applicationContext) else null,
-            fallback = AndroidTtsProvider(applicationContext),
+            primary = if (isAutomotive) PleosTtsProvider(applicationContext, guidanceAudio.attributes) else null,
+            fallback = AndroidTtsProvider(applicationContext, guidanceAudio.attributes),
+            audio = guidanceAudio,
         )
         voiceInputProvider = PleosVoiceInputProvider(applicationContext)
         parkingLocationProvider = if (useDemo) {
@@ -487,6 +491,7 @@ private fun VoiceOverlay(state: VoiceInputState, onCancel: () -> Unit, modifier:
     Row(
         modifier
             .padding(bottom = 96.dp)
+            .pleosShadowLevel1(RoundedCornerShape(32.dp))
             .clip(RoundedCornerShape(32.dp))
             .background(PanelRaised)
             .clickable(onClick = onCancel)
@@ -521,7 +526,8 @@ private fun NavRail(selected: Int, alertCount: Int, vertical: Boolean, onSelect:
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(icon, contentDescription = label, tint = content, modifier = Modifier.size(40.dp))
+                // Pleos iconography base size is 48dp.
+                Icon(icon, contentDescription = label, tint = content, modifier = Modifier.size(48.dp))
                 Spacer(Modifier.size(6.dp))
                 Text(label, color = content, style = PleosType.labelMedium, maxLines = 1)
             }
