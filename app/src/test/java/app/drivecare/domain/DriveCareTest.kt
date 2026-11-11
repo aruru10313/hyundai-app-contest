@@ -61,6 +61,14 @@ class DriveCareAdvisorTest {
     private val advisor = DriveCareAdvisor()
 
     @Test
+    fun `no take-a-break alert while the driver is already resting`() {
+        val trip = TripSnapshot(etaSeconds = 3600, remainingRouteMeters = 80_000, isRouteDriving = true)
+        val car = CarSnapshot(tripDrivingSeconds = 125 * 60, rangeRemainingMeters = 500_000)
+        assertEquals(listOf("rest:overdue"), advisor.evaluate(trip, car, isParked = true).alerts.map { it.key })
+        assertTrue(advisor.evaluate(trip, car, isParked = true, resting = true).alerts.isEmpty())
+    }
+
+    @Test
     fun `range shortfall outranks rest advice`() {
         val report = advisor.evaluate(
             trip = TripSnapshot(etaSeconds = 3600, remainingRouteMeters = 80_000, isRouteDriving = true),

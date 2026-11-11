@@ -136,8 +136,9 @@ class DriveCareAdvisor(
     /**
      * @param isParked exit checks (doors, headlights) only matter once the car is parked,
      *   so they are suppressed while driving.
+     * @param resting the driver is taking a break right now, so "take a break" isn't repeated.
      */
-    fun evaluate(trip: TripSnapshot, car: CarSnapshot, isParked: Boolean): DriveCareReport {
+    fun evaluate(trip: TripSnapshot, car: CarSnapshot, isParked: Boolean, resting: Boolean = false): DriveCareReport {
         val rest = if (trip.arrived) RestAdvice.Unknown else restCoach.advise(car.tripDrivingSeconds, trip.etaSeconds)
         val range = if (trip.arrived) RangeAdvice.Unknown else rangeCheck.advise(car.rangeRemainingMeters, trip.remainingRouteMeters)
         val unlocked = if (isParked) car.doorLocked.filterValues { locked -> !locked }.keys.sorted() else emptyList()
@@ -147,7 +148,7 @@ class DriveCareAdvisor(
         val alerts = buildList {
             rangeAlert(range, car.energyType)?.let(::add)
             lowEnergyAlert(car)?.let(::add)
-            restAlert(rest)?.let(::add)
+            if (!resting) restAlert(rest)?.let(::add)
             if (unlocked.isNotEmpty()) {
                 val names = unlocked.joinToString(", ") { it.label }
                 add(

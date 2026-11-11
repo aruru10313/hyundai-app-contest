@@ -64,4 +64,61 @@ class RestStopFinderTest {
     fun `spoken place reads distance then name`() {
         assertEquals("12km 앞 대관령휴게소", RestStopSuggestion(daegwallyeong, 12_300).spokenPlace)
     }
+
+    @Test
+    fun `when range is tight a stop with fuel wins over a nearer one without`() {
+        val near = RestArea("가까운휴게소", GeoPoint(37.58, 128.39), true)
+        val withFuel = RestArea("주유되는휴게소", GeoPoint(37.62, 128.52), true, hasFuel = true)
+        val finder = RestStopFinder(listOf(near, withFuel))
+        assertEquals("가까운휴게소", finder.nextAhead(start, heading, gangneung)?.area?.name)
+        val pick = finder.nextAhead(start, heading, gangneung, refuel = EnergyType.FUEL)
+        assertEquals("주유되는휴게소", pick?.area?.name)
+        assertTrue(pick!!.refuelHere)
+    }
+
+    @Test
+    fun `an EV looks for chargers, not gas stations`() {
+        val gas = RestArea("주유만", GeoPoint(37.58, 128.39), true, hasFuel = true)
+        val charger = RestArea("충전가능", GeoPoint(37.62, 128.52), true, hasCharger = true)
+        val pick = RestStopFinder(listOf(gas, charger)).nextAhead(start, heading, gangneung, refuel = EnergyType.EV)
+        assertEquals("충전가능", pick?.area?.name)
+    }
+}
+
+class RestTrackerTest {
+    @Test
+    fun `a full 15 minute stop restarts the continuous driving count`() {
+        val t = RestTracker()
+        assertEquals(100 * 60, t.continuousSeconds(100 * 60))
+        t.onParked(nowMillis = 0, tripDrivingSeconds = 100 * 60)
+        assertEquals(5 * 60, t.remainingSeconds(10 * 60_000L))
+        assertTrue(t.onDriving(nowMillis = 16 * 60_000L))
+        assertEquals(10 * 60, t.continuousSeconds(110 * 60))
+    }
+
+    @Test
+    fun `a short stop does not count as rest`() {
+        val t = RestTracker()
+        t.onParked(0, 100 * 60)
+        assertEquals(false, t.onDriving(5 * 60_000L))
+        assertEquals(110 * 60, t.continuousSeconds(110 * 60))
+    }
+
+    @Test
+    fun `reset forgets the baseline`() {
+        val t = RestTracker()
+        t.onParked(0, 100 * 60)
+        t.onDriving(20 * 60_000L)
+        t.reset()
+        assertEquals(30 * 60, t.continuousSeconds(30 * 60))
+    }
+
+    @Test
+    fun `a trip timer that restarts drops the old baseline`() {
+        val t = RestTracker()
+        t.onParked(0, 100 * 60)
+        t.onDriving(20 * 60_000L)
+        assertEquals(5 * 60, t.continuousSeconds(5 * 60))
+        assertEquals(6 * 60, t.continuousSeconds(6 * 60))
+    }
 }

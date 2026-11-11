@@ -8,7 +8,8 @@ import org.json.JSONArray
 /**
  * Korean highway service areas (휴게소) and drowsy-driver shelters (졸음쉼터), bundled so the app
  * works offline. Data © OpenStreetMap contributors, ODbL (highway=services / highway=rest_area,
- * filtered to names containing 휴게소 or 쉼터).
+ * filtered to names containing 휴게소 or 쉼터). "fuel"/"ev" mark a gas station / EV charger mapped within
+ * 400 m (amenity=fuel / amenity=charging_station); map coverage is incomplete, so absence means unknown.
  */
 object RestAreaRepository {
     @Volatile private var cached: List<RestArea>? = null
@@ -22,6 +23,8 @@ object RestAreaRepository {
                 name = o.getString("name"),
                 point = GeoPoint(o.getDouble("lat"), o.getDouble("lon")),
                 isServiceArea = o.getString("kind") == "휴게소",
+                hasFuel = o.optInt("fuel") == 1,
+                hasCharger = o.optInt("ev") == 1,
             )
         }
     }.getOrDefault(emptyList()).also { cached = it }

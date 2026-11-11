@@ -10,10 +10,27 @@ import kotlin.math.sqrt
 
 data class GeoPoint(val lat: Double, val lon: Double)
 
-/** A place to take a break: a highway service area (휴게소) or a drowsy-driver shelter (졸음쉼터). */
-data class RestArea(val name: String, val point: GeoPoint, val isServiceArea: Boolean)
+/**
+ * A place to take a break: a highway service area (휴게소) or a drowsy-driver shelter (졸음쉼터).
+ * [hasFuel] / [hasCharger] are positive-only: true means map data confirms a gas station / EV
+ * charger nearby; false means unknown, not "none".
+ */
+data class RestArea(
+    val name: String,
+    val point: GeoPoint,
+    val isServiceArea: Boolean,
+    val hasFuel: Boolean = false,
+    val hasCharger: Boolean = false,
+) {
+    fun canRefuel(type: EnergyType?): Boolean = if (type == EnergyType.EV) hasCharger else hasFuel
+}
 
-data class RestStopSuggestion(val area: RestArea, val distanceMeters: Int) {
+data class RestStopSuggestion(
+    val area: RestArea,
+    val distanceMeters: Int,
+    /** The stop was picked because the car can also refuel or charge there. */
+    val refuelHere: Boolean = false,
+) {
     /** "12km 앞 대관령휴게소" */
     val spokenPlace: String get() = "${formatKm(distanceMeters)} 앞 ${area.name}"
 }
@@ -60,7 +77,10 @@ class RestStopFinder(
         headingDegrees: Double,
         destination: GeoPoint? = null,
         destinationName: String? = null,
+        /** Set when range is tight: stops where this energy type can be topped up win. */
+        refuel: EnergyType? = null,
     ): RestStopSuggestion? {
+        val wantsEnergy = refuel != null
         val toDestination = destination?.let { Geo.distanceMeters(position, it) }
         // A twin service area on the other carriageway is named for the other direction.
         val towards = destinationName?.trim()?.take(2)?.takeIf { it.length == 2 }
@@ -78,8 +98,62 @@ class RestStopFinder(
                 var score = d
                 if (!area.isServiceArea) score += 5_000  // a 휴게소 has food and toilets; worth a little detour
                 if (towards != null && "방향" in area.name && towards !in area.name) score += 20_000
+                // Resting and refuelling in one stop beats two stops when range is tight, so any stop
+                // within reach that can refuel wins over one that can't.
+                if (wantsEnergy && area.canRefuel(refuel)) score -= maxMeters + 20_000
                 score
             }
-            ?.let { (area, d) -> RestStopSuggestion(area, d.roundToInt()) }
+            ?.let { (area, d) ->
+                RestStopSuggestion(area, d.roundToInt(), refuelHere = wantsEnergy && area.canRefuel(refuel))
+            }
+    }
+}
+
+/**
+ * Tracks breaks taken mid-trip. A stop of at least [restSeconds] (15 min, the length Korea
+ * Expressway Corporation counts as a rest) restarts the continuous-driving count; shorter stops
+ * don't. The car's trip timer keeps running across stops, so the rest is recorded as a baseline.
+ */
+class RestTracker(private val restSeconds: Int = 15 * 60) {
+    private var parkedAtMillis: Long? = null
+    private var tripAtPark: Int? = null
+    private var baseline = 0
+
+    val isResting: Boolean get() = parkedAtMillis != null
+
+    fun onParked(nowMillis: Long, tripDrivingSeconds: Int?) {
+        if (parkedAtMillis != null) return
+        parkedAtMillis = nowMillis
+        tripAtPark = tripDrivingSeconds
+    }
+
+    /** Back on the road. Returns true if the stop counted as a full rest. */
+    fun onDriving(nowMillis: Long): Boolean {
+        val rested = isComplete(nowMillis)
+        if (rested) tripAtPark?.let { baseline = it }
+        parkedAtMillis = null
+        tripAtPark = null
+        return rested
+    }
+
+    fun restedSeconds(nowMillis: Long): Int =
+        parkedAtMillis?.let { ((nowMillis - it) / 1000).toInt().coerceAtLeast(0) } ?: 0
+
+    fun remainingSeconds(nowMillis: Long): Int = (restSeconds - restedSeconds(nowMillis)).coerceAtLeast(0)
+
+    fun isComplete(nowMillis: Long): Boolean = isResting && restedSeconds(nowMillis) >= restSeconds
+
+    /** Driving time since the last full rest. */
+    fun continuousSeconds(tripDrivingSeconds: Int?): Int? = tripDrivingSeconds?.let {
+        // The car's trip timer went back (new ignition cycle): the old rest no longer applies.
+        if (it < baseline) baseline = 0
+        it - baseline
+    }
+
+    /** New trip: forget earlier rests. */
+    fun reset() {
+        parkedAtMillis = null
+        tripAtPark = null
+        baseline = 0
     }
 }
