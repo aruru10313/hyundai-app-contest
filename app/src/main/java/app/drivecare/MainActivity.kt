@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,6 +69,8 @@ import app.drivecare.data.RestAreaRepository
 import app.drivecare.domain.Geo
 import app.drivecare.domain.RestArea
 import app.drivecare.domain.RestStopFinder
+import androidx.compose.material.icons.outlined.Coffee
+import app.drivecare.domain.RestTracker
 import app.drivecare.domain.RestStopSuggestion
 import app.drivecare.domain.objectParticle
 import kotlinx.coroutines.Job
@@ -272,10 +275,19 @@ private fun DriveCareScreen(
     val navigationState by navigationStateProvider.state.collectAsState()
     val isParked = uxState.mode == DrivingSafetyMode.PARKED
     val trip = navigationState.trip
-    val car = vehicleState.car
+
+    // A 15-minute stop mid-trip restarts the continuous-driving count. Demo time runs fast, so the
+    // demo drive supplies its own clock.
+    val now: () -> Long = remember(demoDrive) { demoDrive?.let { d -> { d.nowMillis() } } ?: { System.currentTimeMillis() } }
+    val restTracker = remember { RestTracker() }
+    var restEpoch by remember { mutableIntStateOf(0) }
+    var restRemaining by remember { mutableStateOf<Int?>(null) }
+    val car = vehicleState.car.let { raw ->
+        restEpoch.let { raw.copy(tripDrivingSeconds = restTracker.continuousSeconds(raw.tripDrivingSeconds)) }
+    }
 
     val advisor = remember { DriveCareAdvisor() }
-    val report = advisor.evaluate(trip, car, isParked)
+    val report = advisor.evaluate(trip, car, isParked, resting = isParked && restRemaining != null)
     val announcementGate = remember { AnnouncementGate() }
     val tripStartGate = remember { TripAutoStartGate() }
     val scope = rememberCoroutineScope()
@@ -305,6 +317,10 @@ private fun DriveCareScreen(
     var declinedStop by remember { mutableStateOf<String?>(null) }
     var awaitingAnswer by remember { mutableStateOf<RestStopSuggestion?>(null) }
     val needsRest = report.rest is RestAdvice.RestSoon || report.rest is RestAdvice.Overdue
+    // Range tight or short: prefer a stop where the car can also refuel / charge.
+    val needsEnergy = report.range is RangeAdvice.Tight || report.range is RangeAdvice.Short ||
+        (car.energyPercent ?: 100) <= 15
+    val refuel = if (needsEnergy) car.energyType ?: EnergyType.FUEL else null
     val position = trip.position
     val heading = trip.headingDegrees
     // Close to the destination a detour makes less sense than resting on arrival.
@@ -312,17 +328,24 @@ private fun DriveCareScreen(
     // Once a place is offered it stays the offer until the car passes it, so the suggestion (and the
     // spoken question) doesn't hop between nearby stops as the car moves.
     var offeredStop by remember { mutableStateOf<RestArea?>(null) }
-    val restOffer = if (!isParked && trip.isRouteDriving && trip.waypointName == null && needsRest && !arrivingSoon &&
+    val restOffer = if (!isParked && trip.isRouteDriving && trip.waypointName == null &&
+        (needsRest || report.range is RangeAdvice.Short) && !arrivingSoon &&
         position != null && heading != null
     ) {
         val kept = offeredStop?.takeIf { area ->
             Geo.distanceMeters(position, area.point) > 500 &&
                 Geo.angleBetween(Geo.bearingDegrees(position, area.point), heading) < 90
         }
-        val offer = kept?.let { RestStopSuggestion(it, Geo.distanceMeters(position, it.point).toInt()) }
-            ?: remember(position, heading, trip.destination) {
-                restFinder.nextAhead(position, heading, trip.destination, trip.destinationName)
-            }
+        val fresh = remember(position, heading, trip.destination, refuel) {
+            restFinder.nextAhead(position, heading, trip.destination, trip.destinationName, refuel)
+        }
+        // Switch only when the new pick lets the car refuel and the kept one doesn't.
+        val keepOld = kept != null && (fresh == null || !fresh.refuelHere || (refuel != null && kept.canRefuel(refuel)))
+        val offer = if (keepOld) {
+            RestStopSuggestion(kept!!, Geo.distanceMeters(position, kept.point).toInt(), refuelHere = refuel != null && kept.canRefuel(refuel))
+        } else {
+            fresh
+        }
         offer?.takeIf { it.area.name != declinedStop }
     } else {
         null
@@ -333,6 +356,37 @@ private fun DriveCareScreen(
         navigationStateProvider.addWaypoint(stop.area)
         awaitingAnswer = null
         say("${stop.area.name}${objectParticle(stop.area.name)} 경유지로 추가했어요.")
+    }
+
+    // Breaks: parked mid-route starts the rest timer; driving on ends it.
+    LaunchedEffect(isParked) {
+        if (isParked && trip.isRouteDriving && !trip.arrived) {
+            restTracker.onParked(now(), vehicleState.car.tripDrivingSeconds)
+            var announced = false
+            while (true) {
+                restRemaining = restTracker.remainingSeconds(now())
+                if (!announced && restTracker.isComplete(now())) {
+                    announced = true
+                    say("15분 쉬었어요. 출발하면 연속 운전 시간을 처음부터 다시 셀게요.")
+                }
+                delay(1_000L)
+            }
+        } else if (!isParked && restTracker.isResting) {
+            restTracker.onDriving(now())
+            restRemaining = null
+            restEpoch++
+        }
+    }
+    // A new trip after arriving starts the count from zero (the car's own trip timer may keep running).
+    var tripEnded by remember { mutableStateOf(false) }
+    LaunchedEffect(trip.arrived) { if (trip.arrived) tripEnded = true }
+    LaunchedEffect(trip.isRouteDriving) {
+        if (trip.isRouteDriving && tripEnded) {
+            tripEnded = false
+            restTracker.reset()
+            restRemaining = null
+            restEpoch++
+        }
     }
 
     // A briefing when route guidance starts, then each new or escalated alert exactly once.
@@ -397,7 +451,12 @@ private fun DriveCareScreen(
         val stop = restOffer ?: return@LaunchedEffect
         if (!askedStops.add(stop.area.name)) return@LaunchedEffect
         awaitingAnswer = stop
-        say("${stop.spokenPlace}${objectParticle(stop.area.name)} 경유지로 추가할까요? 추가하려면 응이라고 말씀하세요.").join()
+        val energyNote = when {
+            !stop.refuelHere -> ""
+            car.energyType == EnergyType.EV -> " 쉬면서 충전도 할 수 있어요."
+            else -> " 쉬면서 주유도 할 수 있어요."
+        }
+        say("${stop.spokenPlace}${objectParticle(stop.area.name)} 경유지로 추가할까요?$energyNote 추가하려면 응이라고 말씀하세요.").join()
         requestMic { voiceInputProvider.listen(::handleVoice) }
     }
     LaunchedEffect(report.alerts) {
@@ -436,7 +495,9 @@ private fun DriveCareScreen(
                         ParkedDashboard(
                             trip = trip,
                             vehicleState = vehicleState,
+                            car = car,
                             report = report,
+                            resting = restRemaining != null,
                             navigationStatus = navigationState.status,
                             navigationError = navigationState.error,
                             isLandscape = isLandscape,
@@ -469,6 +530,9 @@ private fun DriveCareScreen(
                 restOffer = restOffer,
                 onAddRestStop = { restOffer?.let(::addRestStop) },
             )
+        }
+        if (isParked) {
+            restRemaining?.let { RestBanner(it, Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp)) }
         }
         VoiceOverlay(voiceState, onCancel = voiceInputProvider::cancel, modifier = Modifier.align(Alignment.BottomCenter))
     }
@@ -616,7 +680,8 @@ private fun DrivingView(
             restOffer?.let {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "휴게소 제안  ·  ${it.spokenPlace}",
+                    "휴게소 제안  ·  ${it.spokenPlace}" +
+                        if (it.refuelHere) (if (car.energyType == EnergyType.EV) "  ·  충전 가능" else "  ·  주유 가능") else "",
                     color = Good,
                     fontSize = ts(20),
                     fontWeight = FontWeight.SemiBold,
@@ -726,14 +791,15 @@ private fun BriefingButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 private fun ParkedDashboard(
     trip: TripSnapshot,
     vehicleState: VehicleSnapshot,
+    car: app.drivecare.domain.CarSnapshot,
     report: DriveCareReport,
+    resting: Boolean,
     navigationStatus: String,
     navigationError: String?,
     isLandscape: Boolean,
     onBriefing: () -> Unit,
     demoDrive: DemoDrive?,
 ) {
-    val car = vehicleState.car
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -745,7 +811,7 @@ private fun ParkedDashboard(
                     if (trip.arrived) {
                         "${trip.destinationName ?: "목적지"} 도착 · 내리기 전에 확인하세요"
                     } else {
-                        "주차 중 · 내비 ${navigationError?.let { "연결 안 됨" } ?: navigationStatus}"
+                        "주차 중 · 내비 ${navigationError?.let { "연결 안 됨" } ?: navigationLabel(navigationStatus)}"
                     },
                     color = Muted,
                     fontSize = ts(15),
@@ -757,13 +823,14 @@ private fun ParkedDashboard(
         report.alerts.forEach { AlertRow(it) }
 
         val cards = listOf<@Composable (Modifier) -> Unit>(
-            { RestCard(car.tripDrivingSeconds, report.rest, it) },
+            { RestCard(car.tripDrivingSeconds, report.rest, resting, it) },
             { RangeCard(trip, car.rangeRemainingMeters, car.energyPercent, car.energyType, report.range, it) },
             { ExitCheckCard(car.doorLocked, car.headlightsOn, it) },
         )
         if (isLandscape) {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                cards.forEach { card -> card(Modifier.weight(1f).height(250.dp)) }
+            // As tall as the tallest card, so the exit checklist never gets cut off.
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                cards.forEach { card -> card(Modifier.weight(1f).fillMaxHeight()) }
             }
         } else {
             cards.forEach { card -> card(Modifier.fillMaxWidth()) }
@@ -858,10 +925,15 @@ private fun Meter(fraction: Float, color: Color) {
 }
 
 @Composable
-private fun RestCard(drivenSeconds: Int?, rest: RestAdvice, modifier: Modifier) {
+private fun RestCard(drivenSeconds: Int?, rest: RestAdvice, resting: Boolean, modifier: Modifier) {
     DashCard("휴식 코치", modifier) {
-        Text(restShort(rest), color = restColor(rest), fontSize = ts(30), fontWeight = FontWeight.Bold)
-        Meter((drivenSeconds ?: 0) / (2f * 60 * 60), restColor(rest))
+        Text(
+            if (resting) "휴식 중" else restShort(rest),
+            color = if (resting) Good else restColor(rest),
+            fontSize = ts(30),
+            fontWeight = FontWeight.Bold,
+        )
+        Meter((drivenSeconds ?: 0) / (2f * 60 * 60), if (resting) Good else restColor(rest))
         Text(
             drivenSeconds?.let { "연속 운전 ${formatDuration(it)} / 2시간마다 15분 휴식" }
                 ?: "출발하면 연속 운전 시간을 잽니다",
@@ -938,6 +1010,34 @@ private fun CheckLine(label: String, value: String?, ok: Boolean?) {
     }
 }
 
+/** Shown while parked mid-trip: how long until the break counts as a full rest. */
+@Composable
+private fun RestBanner(remainingSeconds: Int, modifier: Modifier = Modifier) {
+    val done = remainingSeconds <= 0
+    Row(
+        modifier = modifier
+            .pleosShadowLevel1(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(PanelRaised)
+            .padding(horizontal = 28.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Coffee, contentDescription = null, tint = if (done) Good else Caution, modifier = Modifier.size(32.dp))
+        Spacer(Modifier.width(14.dp))
+        Text(
+            if (done) {
+                "휴식 완료 · 연속 운전 시간이 초기화됐어요"
+            } else {
+                "휴식 중 · %d:%02d 남음 · 15분 쉬면 연속 운전 시간이 초기화돼요".format(remainingSeconds / 60, remainingSeconds % 60)
+            },
+            color = TextMain,
+            fontSize = ts(20),
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 private fun DemoControls(demo: DemoDrive, arrived: Boolean, exitChecksDone: Boolean) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -970,6 +1070,14 @@ private fun DemoChip(label: String, onClick: () -> Unit) {
         color = TextMain,
         fontSize = ts(14),
     )
+}
+
+/** NaviHelper status names in words; unknown names are shown as they are. */
+private fun navigationLabel(status: String) = when (status) {
+    "ROUTE_DRIVE" -> "경로 안내 중"
+    "WAYPOINT_ARRIVED" -> "경유지 도착"
+    "INACTIVE" -> "안내 없음"
+    else -> status
 }
 
 private fun restShort(rest: RestAdvice) = when (rest) {
