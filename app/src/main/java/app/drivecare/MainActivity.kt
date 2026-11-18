@@ -64,7 +64,10 @@ import androidx.lifecycle.lifecycleScope
 import app.drivecare.data.AndroidCarUxRestrictionProvider
 import app.drivecare.data.AndroidTtsProvider
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import app.drivecare.data.DemoDrive
+import app.drivecare.data.DemoMode
 import app.drivecare.data.RestAreaRepository
 import app.drivecare.domain.Geo
 import app.drivecare.domain.RestArea
@@ -173,7 +176,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         isAutomotive = packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)
-        val useDemo = !isAutomotive || ProviderConfig.forceDemoDrive
+        DemoMode.applyLaunchExtra(this, intent)
+        val useDemo = !isAutomotive || ProviderConfig.forceDemoDrive || DemoMode.isOn(this)
         // Pleos voice services only exist on a Pleos head unit; elsewhere use Android's own.
         val guidanceAudio = GuidanceAudio(applicationContext)
         ttsProvider = FallbackTtsProvider(
@@ -239,6 +243,12 @@ class MainActivity : ComponentActivity() {
                         voiceInputProvider = voiceInputProvider,
                         parkingLocationProvider = parkingLocationProvider,
                         requestMic = ::withMicPermission,
+                        // Only a head unit has real data to switch back to.
+                        onToggleDemo = if (isAutomotive && !ProviderConfig.forceDemoDrive) {
+                            { DemoMode.set(this, !useDemo); recreate() }
+                        } else {
+                            null
+                        },
                     )
                 }
             }
@@ -264,6 +274,7 @@ private fun DriveCareScreen(
     uxRestrictionProvider: UxRestrictionProvider,
     navigationStateProvider: NavigationStateProvider,
     demoDrive: DemoDrive?,
+    onToggleDemo: (() -> Unit)?,
     voiceInputProvider: VoiceInputProvider,
     parkingLocationProvider: ParkingLocationProvider,
     requestMic: (() -> Unit) -> Unit,
@@ -503,6 +514,7 @@ private fun DriveCareScreen(
                             isLandscape = isLandscape,
                             onBriefing = { say(briefing(trip, car, report)) },
                             demoDrive = demoDrive,
+                            onToggleDemo = onToggleDemo,
                         )
                     }
                 }
@@ -799,6 +811,7 @@ private fun ParkedDashboard(
     isLandscape: Boolean,
     onBriefing: () -> Unit,
     demoDrive: DemoDrive?,
+    onToggleDemo: (() -> Unit)?,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -806,7 +819,18 @@ private fun ParkedDashboard(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("드라이브 케어", color = TextMain, fontSize = ts(30), fontWeight = FontWeight.Bold)
+                // Long-press switches between the demo trip and the car's real data (parked only).
+                Text(
+                    "드라이브 케어",
+                    modifier = if (onToggleDemo != null) {
+                        Modifier.pointerInput(onToggleDemo) { detectTapGestures(onLongPress = { onToggleDemo() }) }
+                    } else {
+                        Modifier
+                    },
+                    color = TextMain,
+                    fontSize = ts(30),
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(
                     if (trip.arrived) {
                         "${trip.destinationName ?: "목적지"} 도착 · 내리기 전에 확인하세요"
@@ -839,7 +863,7 @@ private fun ParkedDashboard(
         BriefingButton(onBriefing, Modifier.fillMaxWidth().height(76.dp))
 
         if (demoDrive != null) {
-            DemoControls(demoDrive, trip.arrived, report.exitChecklistDone)
+            DemoControls(demoDrive, trip.arrived, report.exitChecklistDone, onToggleDemo)
         }
         if (vehicleState.unavailable.isNotEmpty()) {
             Text(
@@ -1039,7 +1063,7 @@ private fun RestBanner(remainingSeconds: Int, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun DemoControls(demo: DemoDrive, arrived: Boolean, exitChecksDone: Boolean) {
+private fun DemoControls(demo: DemoDrive, arrived: Boolean, exitChecksDone: Boolean, onExit: (() -> Unit)?) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         DemoChip(if (arrived) "시연: 다시 출발" else "시연: 강릉 가는 길 주행") {
             // Restart only after arriving, so a fresh start keeps what the driver set up while parked.
@@ -1048,6 +1072,9 @@ private fun DemoControls(demo: DemoDrive, arrived: Boolean, exitChecksDone: Bool
         }
         if (arrived && !exitChecksDone) {
             DemoChip("시연: 문 잠그고 전조등 끄기", demo::completeExitChecks)
+        }
+        if (onExit != null) {
+            DemoChip("시연 끝내기 · 실제 차량 데이터", onExit)
         }
     }
     Text(

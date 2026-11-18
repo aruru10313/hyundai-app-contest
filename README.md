@@ -44,7 +44,9 @@ adb install apk/<팀명>_DriveCare_release.apk
 3. 도착 후 하차 경고(뒷문 열림·전조등·연료) 확인 → **내 차** 탭의 **하차 모드**
 4. 마이크 버튼 → "에어컨 꺼", "온도 23도", "얼마나 남았어" 등 음성 명령
 
-Pleos 헤드유닛에서도 시연 모드로 보려면 `ProviderConfig.forceDemoDrive = true`로 빌드합니다.
+Pleos 헤드유닛에서는 다시 빌드하지 않고 시연 모드로 바꿀 수 있습니다(주차 중에만).
+- **드라이브 케어** 탭에서 제목 "드라이브 케어"를 길게 누르면 시연 모드로 바뀌고, **시연 끝내기 · 실제 차량 데이터** 버튼으로 돌아옵니다. 설정은 앱을 다시 켜도 유지됩니다.
+- adb로도 바꿀 수 있습니다: `adb shell am start -S --user current -n app.drivecare/.MainActivity --ez demo true` (끄기는 `false`)
 
 ### 소스에서 빌드
 
