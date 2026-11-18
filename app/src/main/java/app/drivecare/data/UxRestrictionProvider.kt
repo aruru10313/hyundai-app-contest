@@ -7,9 +7,13 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 
 enum class DrivingSafetyMode {
     PARKED,
@@ -167,6 +171,29 @@ class AndroidCarUxRestrictionProvider(context: Context) : UxRestrictionProvider 
             car = null
             manager = null
         }
+    }
+}
+
+/**
+ * Demo trip on a real head unit: the scripted drive decides when the demo "drives", but the car's
+ * own CarUxRestrictions still win. If the real car requires distraction optimization (or its state
+ * is unknown), the app stays in the driving view even with the demo running.
+ */
+class DemoOnCarUxRestrictionProvider(
+    private val car: UxRestrictionProvider,
+    val demo: MockUxRestrictionProvider,
+    scope: CoroutineScope,
+) : UxRestrictionProvider {
+    override val state: StateFlow<UxRestrictionSnapshot> =
+        combine(car.state, demo.state, ::merge).stateIn(scope, SharingStarted.Eagerly, merge(car.state.value, demo.state.value))
+    override val isMock = false
+
+    override fun connect() = car.connect()
+    override fun release() = car.release()
+
+    companion object {
+        fun merge(car: UxRestrictionSnapshot, demo: UxRestrictionSnapshot): UxRestrictionSnapshot =
+            if (car.mode == DrivingSafetyMode.DRIVING) car else demo
     }
 }
 

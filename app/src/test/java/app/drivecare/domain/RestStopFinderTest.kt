@@ -43,6 +43,21 @@ class RestStopFinderTest {
     }
 
     @Test
+    fun `never offers the other carriageway's twin, even when only it has fuel`() {
+        val westWithFuel = pyeongchangWest.copy(hasFuel = true)
+        val finder = RestStopFinder(listOf(westWithFuel, pyeongchangEast))
+        val pick = finder.nextAhead(start, heading, gangneung, "강릉역", refuel = EnergyType.FUEL)
+        assertEquals("평창 휴게소 (강릉 방향)", pick?.area?.name)
+        assertEquals(false, pick?.refuelHere)
+    }
+
+    @Test
+    fun `keeps a direction-named stop when its twin for our direction is unknown`() {
+        val pick = RestStopFinder(listOf(pyeongchangWest)).nextAhead(start, heading, gangneung, "강릉역")
+        assertEquals("평창 휴게소 (인천 방향)", pick?.area?.name)
+    }
+
+    @Test
     fun `ignores stops behind the car`() {
         assertNull(RestStopFinder(listOf(behind)).nextAhead(start, heading, gangneung))
     }

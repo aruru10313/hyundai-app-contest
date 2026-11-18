@@ -68,6 +68,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import app.drivecare.data.DemoDrive
 import app.drivecare.data.DemoMode
+import app.drivecare.data.DemoOnCarUxRestrictionProvider
 import app.drivecare.data.RestAreaRepository
 import app.drivecare.domain.Geo
 import app.drivecare.domain.RestArea
@@ -192,15 +193,20 @@ class MainActivity : ComponentActivity() {
             PleosParkingLocationProvider(applicationContext)
         }
 
-        uxRestrictionProvider = if (!useDemo && ProviderConfig.usePleosUxRestrictions) {
+        val carUx = if (isAutomotive && ProviderConfig.usePleosUxRestrictions) {
             AndroidCarUxRestrictionProvider(applicationContext)
         } else {
-            MockUxRestrictionProvider()
+            null
+        }
+        val demoUx = if (useDemo) MockUxRestrictionProvider() else null
+        uxRestrictionProvider = when {
+            // Demo on a head unit still respects the car's real restrictions.
+            carUx != null && demoUx != null -> DemoOnCarUxRestrictionProvider(carUx, demoUx, lifecycleScope)
+            carUx != null -> carUx
+            else -> demoUx ?: MockUxRestrictionProvider()
         }
         val demo = if (useDemo) {
-            DemoDrive(lifecycleScope) { driving ->
-                (uxRestrictionProvider as? MockUxRestrictionProvider)?.setDriving(driving)
-            }
+            DemoDrive(lifecycleScope) { driving -> demoUx?.setDriving(driving) }
         } else {
             null
         }

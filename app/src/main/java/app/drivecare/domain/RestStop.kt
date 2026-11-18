@@ -66,12 +66,29 @@ object Geo {
  * Picks the next rest stop ahead of the car without route geometry: close enough to reach soon,
  * roughly in the direction of travel, and nearer to the destination than the car is now.
  */
+private val directionSuffix = Regex("""\s*\(?\s*[가-힣A-Za-z]+\s*방향\s*\)?\s*$""")
+
 class RestStopFinder(
     private val areas: List<RestArea>,
     private val minMeters: Double = 2_000.0,
     private val maxMeters: Double = 40_000.0,
     private val coneDegrees: Double = 35.0,
 ) {
+    /** "평창 휴게소 (인천 방향)" → "평창휴게소": the name shared by both carriageways' twins. */
+    private fun twinName(name: String) = name.replace(directionSuffix, "").replace(" ", "")
+
+    /** Twin service areas named by direction, grouped by their shared name. */
+    private val directionTwins: Map<String, List<String>> =
+        areas.filter { "방향" in it.name }.groupBy({ twinName(it.name) }, { it.name })
+
+    /**
+     * The other carriageway's twin, which a driver can't reach without leaving the expressway.
+     * Only when the twin for our direction exists; otherwise the name alone can't tell.
+     */
+    private fun isOtherCarriageway(area: RestArea, towards: String?): Boolean =
+        towards != null && "방향" in area.name && towards !in area.name &&
+            directionTwins[twinName(area.name)]?.any { towards in it } == true
+
     fun nextAhead(
         position: GeoPoint,
         headingDegrees: Double,
@@ -90,6 +107,7 @@ class RestStopFinder(
             .filter { (area, _) ->
                 Geo.angleBetween(Geo.bearingDegrees(position, area.point), headingDegrees) <= coneDegrees
             }
+            .filter { (area, _) -> !isOtherCarriageway(area, towards) }
             .filter { (area, _) ->
                 destination == null || toDestination == null ||
                     Geo.distanceMeters(area.point, destination) < toDestination

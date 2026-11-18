@@ -59,7 +59,10 @@
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|keyboard|keyboardHidden|navigation|locale|layoutDirection|fontScale"
             android:exported="true">
+            <!-- Compose redraws on these itself. Recreating would drop the trip state (rest timer,
+                 demo drive) whenever the car switches day/night or the display rotates. -->
             <meta-data
                 android:name="distractionOptimized"
                 android:value="true" />

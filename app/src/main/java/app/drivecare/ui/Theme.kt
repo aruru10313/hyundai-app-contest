@@ -1,5 +1,8 @@
 package app.drivecare.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -65,11 +68,12 @@ private val LightPalette = PleosPalette(
 )
 
 /**
- * The active palette. Set once at the root from the system theme (a theme change recreates the
- * activity), so leaf composables can keep reading plain values.
+ * The active palette, set at the root from the system theme. It is snapshot state: the activity
+ * handles uiMode changes itself (the car switches day/night on its own), so every composable that
+ * reads a color redraws when the theme flips.
  */
 internal object Pleos {
-    var dark = true
+    var dark by mutableStateOf(true)
     val palette get() = if (dark) DarkPalette else LightPalette
 }
 
